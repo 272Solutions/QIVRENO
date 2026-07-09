@@ -316,6 +316,7 @@ export default function App() {
   const [editingAgent, setEditingAgent] = useState<Agent | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
 
   const refresh = useCallback(() => {
@@ -508,11 +509,14 @@ export default function App() {
             onQuickStart={() => setShowTemplates(true)}
             onNewAgent={() => setEditingAgent("new")}
             onConcierge={startConcierge}
+            onOpenFile={(name) => { setFilesFocus(name); setView({ kind: "files" }); }}
           />
         )}
         {view.kind === "activity" && <ActivityFeed snap={snap} nameOf={nameOf} colorOf={colorOf} />}
         {view.kind === "library" && <LibraryView snap={snap} notify={notify} />}
-        {view.kind === "files" && <FilesView notify={notify} />}
+        {view.kind === "files" && (
+          <FilesView notify={notify} focus={filesFocus} onFocusConsumed={() => setFilesFocus(null)} />
+        )}
         {view.kind === "agent" && selectedAgent && (
           <AgentView
             agent={selectedAgent}
@@ -619,6 +623,7 @@ function KanbanBoard(props: {
   onQuickStart: () => void;
   onNewAgent: () => void;
   onConcierge: () => void;
+  onOpenFile: (name: string) => void;
 }) {
   const { snap, agentById, notify } = props;
   const [prompt, setPrompt] = useState("");
@@ -748,6 +753,9 @@ function KanbanBoard(props: {
                         onClick={() => setDetailId(t.id)}
                       >
                         <div className="kcard-title">{t.title}</div>
+                        {t.status === "done" && t.result && (
+                          <div className="kcard-snippet">{t.result.replace(/[#*`>-]/g, "").slice(0, 110)}</div>
+                        )}
                         <div className="kcard-meta">
                           {agent ? (
                             <span className="agent-chip"><i style={{ background: agent.color }} /> {agent.name}</span>
@@ -772,6 +780,7 @@ function KanbanBoard(props: {
           agent={detail.agent_id ? agentById.get(detail.agent_id) : undefined}
           onClose={() => setDetailId(null)}
           onMove={(c) => moveTask(detail.id, c)}
+          onOpenFile={props.onOpenFile}
           notify={notify}
         />
       )}
@@ -779,15 +788,56 @@ function KanbanBoard(props: {
   );
 }
 
+/** Turn a raw log line into a human-readable action for review. */
+function prettyAction(line: string): { icon: string; text: string; file?: string } {
+  const grab = (k: string) => line.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`))?.[1];
+  if (line.startsWith("tool: ")) {
+    const name = line.slice(6).split(" ")[0];
+    switch (name) {
+      case "write_file": {
+        const path = grab("path") ?? "a file";
+        return { icon: "📄", text: `Wrote ${path}`, file: path.startsWith("Shared/") ? path.slice(7) : undefined };
+      }
+      case "read_file": return { icon: "👁", text: `Read ${grab("path") ?? "a file"}` };
+      case "list_files": return { icon: "📁", text: "Browsed files" };
+      case "save_process": return { icon: "📚", text: `Saved process “${grab("title") ?? "…"}” to the Library` };
+      case "read_doc": return { icon: "📚", text: `Read library doc ${grab("doc") ?? ""}` };
+      case "list_library": return { icon: "📚", text: "Checked the Library" };
+      case "send_message": return { icon: "💬", text: `Messaged ${grab("to") ?? "a teammate"}: “${(grab("body") ?? "").slice(0, 70)}…”` };
+      case "update_memory": return { icon: "🧠", text: `Updated ${grab("scope") === "shared" ? "the team's shared" : "its private"} memory` };
+      case "move_task": return { icon: "📋", text: `Moved board task ${grab("task") ?? ""} to ${grab("column") ?? ""}` };
+      case "create_agent": return { icon: "🤝", text: `Hired new agent “${grab("name") ?? ""}”` };
+      case "list_board": return { icon: "📋", text: "Checked the board" };
+      case "fetch_url": return { icon: "🌐", text: `Fetched ${grab("url") ?? "a URL"}` };
+      case "run_command": return { icon: "⚡", text: `Ran a command: ${(grab("command") ?? "").slice(0, 70)}` };
+      default: return { icon: "🔧", text: line.slice(6) };
+    }
+  }
+  if (line.startsWith("routed to best fit")) return { icon: "🎯", text: line };
+  if (line.startsWith("started on")) return { icon: "▶️", text: line };
+  if (line.includes("falling back")) return { icon: "⚠️", text: line };
+  if (line.startsWith("error:")) return { icon: "❌", text: line };
+  return { icon: "·", text: line };
+}
+
+function fmtDuration(ms: number): string {
+  const s = Math.max(1, Math.round(ms / 1000));
+  if (s < 90) return `${s}s`;
+  return `${Math.round(s / 60)}m`;
+}
+
 function TaskDetailModal(props: {
   task: Task;
   agent?: Agent;
   onClose: () => void;
   onMove: (c: Column) => void;
+  onOpenFile: (name: string) => void;
   notify: (t: string, e?: boolean) => void;
 }) {
   const { task, agent, notify } = props;
   const active = ["routing", "queued", "running"].includes(task.status);
+  const actions = task.log.map(prettyAction);
+  const files = [...new Set(actions.filter((a) => a.file).map((a) => a.file!))];
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal wide">
@@ -796,29 +846,51 @@ function TaskDetailModal(props: {
           <span className={`badge ${task.status}`}>{task.status}</span>
         </div>
         <div className="detail-sub">
-          {agent ? `Assigned to ${agent.name}` : "Unassigned — routes to best fit when started"}
+          {agent ? `${agent.name}` : "Unassigned — routes to best fit when started"}
           {" · created "}{timeAgo(task.created_at)}
+          {!active && task.updated_at > task.created_at &&
+            ` · took ${fmtDuration(task.updated_at - task.created_at)}`}
         </div>
         <div className="task-detail" style={{ borderTop: "none", paddingTop: 4 }}>
-          <div>
-            <h4>Request</h4>
-            <pre>{task.prompt}</pre>
-          </div>
-          {task.log.length > 0 && (
-            <div>
-              <h4>Log</h4>
-              {task.log.map((l, i) => <div className="log-line" key={i}>{l}</div>)}
-            </div>
-          )}
           {task.result && (
             <div>
-              <h4>{task.status === "failed" ? "Error" : "Result"}</h4>
-              <pre>{task.result}</pre>
+              <h4>{task.status === "failed" ? "Error" : "Summary — what the agent reports"}</h4>
+              {task.status === "failed" ? (
+                <pre>{task.result}</pre>
+              ) : (
+                <div className="result-md"><MarkdownView text={task.result} /></div>
+              )}
               {task.status !== "failed" && (
                 <div className="ai-note">AI-generated — for reference only. Verify before relying on it.</div>
               )}
             </div>
           )}
+          {files.length > 0 && (
+            <div>
+              <h4>Files produced</h4>
+              <div className="file-chips">
+                {files.map((f) => (
+                  <button key={f} className="file-chip" onClick={() => { props.onOpenFile(f); props.onClose(); }}>
+                    📄 {f} <span>open →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {task.log.length > 0 && (
+            <div>
+              <h4>Actions taken</h4>
+              <div className="act-list">
+                {actions.map((a, i) => (
+                  <div className="act-line" key={i}><span className="act-ico">{a.icon}</span> {a.text}</div>
+                ))}
+              </div>
+            </div>
+          )}
+          <details className="req-details">
+            <summary>Original request</summary>
+            <pre>{task.prompt}</pre>
+          </details>
         </div>
         <div className="modal-actions">
           {!active && (
@@ -1388,7 +1460,11 @@ function DashView(props: { text: string }) {
   );
 }
 
-function FilesView(props: { notify: (t: string, e?: boolean) => void }) {
+function FilesView(props: {
+  notify: (t: string, e?: boolean) => void;
+  focus?: string | null;
+  onFocusConsumed?: () => void;
+}) {
   const { notify } = props;
   const [files, setFiles] = useState<SharedFile[]>([]);
   const [selName, setSelName] = useState<string | null>(null);
@@ -1404,6 +1480,14 @@ function FilesView(props: { notify: (t: string, e?: boolean) => void }) {
     const iv = setInterval(refresh, 4000);
     return () => clearInterval(iv);
   }, [refresh]);
+
+  useEffect(() => {
+    if (props.focus) {
+      openFile(props.focus);
+      props.onFocusConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.focus]);
 
   const openFile = async (name: string) => {
     if (dirty) {

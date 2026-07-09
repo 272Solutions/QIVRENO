@@ -70,7 +70,16 @@ pub fn run_agent_loop_at(
         let tool_calls = msg["tool_calls"].as_array().cloned().unwrap_or_default();
 
         if tool_calls.is_empty() {
-            return Ok(strip_thinking(&content));
+            let text = strip_thinking(&content);
+            if text.is_empty() {
+                // Model went silent — ask once for the wrap-up summary.
+                messages.push(json!({
+                    "role": "user",
+                    "content": "Please give your final answer now: summarize what you did, name any files or library docs you created, and note anything that needs the operator's attention."
+                }));
+                continue;
+            }
+            return Ok(text);
         }
         messages.push(msg.clone());
         for call in &tool_calls {

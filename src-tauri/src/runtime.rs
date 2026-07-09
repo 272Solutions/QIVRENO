@@ -555,7 +555,12 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
     if agent.permission == Permission::Sandboxed {
         p.push_str("\nYou are sandboxed: work only within your working directory and the shared folder.\n");
     }
-    p.push_str("\nWhen you are done, end with a clear plain-text summary of what you did — that summary is what gets delivered.\n");
+    p.push_str(
+        "\nWhen you are done, end with a clear plain-text summary — it is what the operator reviews \
+on the board. Include: (1) what you did, (2) the exact names of any files, library docs or \
+processes you created or changed, and (3) anything that needs the operator's attention or a \
+decision. Never end with an empty message.\n",
+    );
     p
 }
 
@@ -747,7 +752,26 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
                 match &outcome {
                     Ok(result) => {
                         t.status = "done".into();
-                        t.result = result.clone();
+                        t.result = if result.trim().is_empty() && t.kind == "task" {
+                            // Never send an empty result to Review — fall back
+                            // to a summary assembled from the action log.
+                            let actions: Vec<String> = t
+                                .log
+                                .iter()
+                                .filter(|l| l.starts_with("tool: "))
+                                .map(|l| format!("- {}", truncate(l.trim_start_matches("tool: "), 160)))
+                                .collect();
+                            if actions.is_empty() {
+                                "The agent finished without a written summary or logged actions — consider re-running this task.".to_string()
+                            } else {
+                                format!(
+                                    "The agent finished without a written summary. Actions it took:\n{}",
+                                    actions.join("\n")
+                                )
+                            }
+                        } else {
+                            result.clone()
+                        };
                     }
                     Err(e) => {
                         t.status = "failed".into();
