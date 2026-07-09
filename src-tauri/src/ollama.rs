@@ -69,6 +69,25 @@ fn resolve_path(workspace: &Path, shared: &Path, raw: &str, sandboxed: bool) -> 
     Ok(joined)
 }
 
+/// Compact, log-safe rendering of tool args: long text values (content,
+/// body) are shortened so identifying fields (path, title, to) survive the
+/// log-line cap.
+pub(crate) fn loggable_args(args: &Value) -> String {
+    let mut v = args.clone();
+    if let Some(obj) = v.as_object_mut() {
+        for key in ["content", "body"] {
+            if let Some(val) = obj.get_mut(key) {
+                if let Some(s) = val.as_str() {
+                    if s.len() > 60 {
+                        *val = Value::String(format!("{}…", truncate(s, 60)));
+                    }
+                }
+            }
+        }
+    }
+    truncate(&v.to_string(), 300)
+}
+
 pub(crate) fn exec_tool(
     app: &AppHandle,
     agent: &Agent,
@@ -315,7 +334,7 @@ pub fn run_agent_loop(
         for call in &tool_calls {
             let name = call["function"]["name"].as_str().unwrap_or_default().to_string();
             let args = call["function"]["arguments"].clone();
-            crate::runtime::log_task_line(app, task_id, &format!("tool: {name} {}", truncate(&args.to_string(), 200)));
+            crate::runtime::log_task_line(app, task_id, &format!("tool: {name} {}", loggable_args(&args)));
             let result = exec_tool(app, agent, &task, &name, &args, &mut sends);
             messages.push(json!({"role":"tool","content": result, "tool_name": name}));
         }

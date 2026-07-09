@@ -334,7 +334,110 @@ fn run_task(app: AppHandle, task_id: String) {
         }
         other => other,
     };
+
+    // Board tasks must arrive in Review with a substantive report. If the
+    // agent's own wrap-up is thin, compose one from the evidence (log +
+    // the actual files it wrote) using whatever local model is available.
+    let outcome = match outcome {
+        Ok(result) if task.kind == "task" && result.trim().len() < 400 => {
+            log_task_line(&app, &task_id, "composing review report…");
+            match compose_report(&app, &task_id, &agent, &result) {
+                Some(report) => Ok(report),
+                None => Ok(result),
+            }
+        }
+        other => other,
+    };
     finalize(&app, &task_id, outcome);
+}
+
+/// Build a completion report from the task, its action log, and the content
+/// of Shared files written during the run. Uses the cheapest local model.
+fn compose_report(app: &AppHandle, task_id: &str, agent: &Agent, raw_result: &str) -> Option<String> {
+    let state = app.state::<AppState>();
+    let settings = state.settings.lock().unwrap().clone();
+    let task = state.tasks.lock().unwrap().iter().find(|t| t.id == task_id).cloned()?;
+
+    // Only real actions go to the composer — routing/backend lines are
+    // internal plumbing that must not leak into an operator-facing report.
+    let tool_lines: Vec<String> = task
+        .log
+        .iter()
+        .filter(|l| l.starts_with("tool: "))
+        .cloned()
+        .collect();
+    let mut ctx = format!(
+        "Task requested by the operator:\n{}\n\nActions you took (complete list — you did nothing else):\n{}\n\nYour own closing message:\n{}\n",
+        truncate(&task.prompt, 1500),
+        if tool_lines.is_empty() { "(no tool actions)".to_string() } else { tool_lines.join("\n") },
+        if raw_result.trim().is_empty() { "(none)" } else { raw_result }.to_owned()
+    );
+    // Attach the content of Shared files this run created, so the report can
+    // describe the actual deliverables.
+    let shared = state.shared_dir();
+    let mut written_files: Vec<String> = vec![];
+    let mut attached = 0;
+    for line in &task.log {
+        if let Some(rest) = line.strip_prefix("tool: write_file ") {
+            if let Some(p) = rest.find("\"path\":\"Shared/") {
+                let start = p + 15;
+                if let Some(end) = rest[start..].find('"') {
+                    let name = &rest[start..start + end];
+                    written_files.push(format!("Shared/{name}"));
+                    if let Ok(content) = std::fs::read_to_string(shared.join(name)) {
+                        ctx.push_str(&format!(
+                            "\nContent of Shared/{name}:\n{}\n",
+                            truncate(&content, 2500)
+                        ));
+                        attached += 1;
+                        if attached >= 3 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let deliverables_rule = if written_files.is_empty() {
+        "You created NO files in this run — the Deliverables section MUST say 'None'. Do not list \
+         any file, document format, or artifact."
+            .to_string()
+    } else {
+        format!(
+            "The ONLY deliverables you may list are exactly these files (no others exist): {}.",
+            written_files.join(", ")
+        )
+    };
+    let prompt = format!(
+        "You are {name}, the {role} on a business's AI team. Write your completion report for the \
+         operator who will review this task before approving it. Write in first person, factually, \
+         based STRICTLY on the information below — never invent actions or artifacts.\n\
+         Rules:\n- {deliverables_rule}\n\
+         - Never mention AI backends, models, routing, tools, fallbacks, or the writing of this report.\n\
+         - If little was accomplished, say so plainly and recommend what to do next.\n\
+         Use exactly these Markdown sections:\n\
+         ### What I did\n(3-6 sentence narrative)\n\
+         ### Deliverables\n(one bullet per file with its exact name and what it contains; or 'None')\n\
+         ### Key decisions\n(bullets)\n\
+         ### Needs your attention\n(approvals, open questions, or 'Nothing — ready to approve.')\n\n{ctx}",
+        name = agent.name,
+        role = agent.role,
+    );
+    let report = routing::ask_ollama(&settings, &prompt).or_else(|| {
+        routing::ask_openai_compat(
+            &crate::builtin::base_url(&settings),
+            "qwen3",
+            &prompt,
+            settings.builtin_enabled && crate::builtin::is_healthy(&settings),
+        )
+    })?;
+    let report = crate::ollama::strip_thinking(&report);
+    if report.trim().len() < 80 {
+        return None;
+    }
+    log_task_line(app, task_id, "review report composed");
+    Some(report)
 }
 
 fn run_backend(
@@ -556,10 +659,16 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         p.push_str("\nYou are sandboxed: work only within your working directory and the shared folder.\n");
     }
     p.push_str(
-        "\nWhen you are done, end with a clear plain-text summary — it is what the operator reviews \
-on the board. Include: (1) what you did, (2) the exact names of any files, library docs or \
-processes you created or changed, and (3) anything that needs the operator's attention or a \
-decision. Never end with an empty message.\n",
+        "\nWhen you are done, your FINAL message must be a completion report the operator reviews \
+before approving your work. Format it in Markdown with exactly these sections:\n\
+### What I did\nA clear paragraph (3-6 sentences) narrating what you actually did and why — \
+written for a busy owner, not a log.\n\
+### Deliverables\nOne bullet per file, library doc or process you created or changed, with its \
+exact name and a one-line description of what's inside. Write 'None' if there are none.\n\
+### Key decisions\nBullet the important choices, assumptions or numbers in your work.\n\
+### Needs your attention\nAnything requiring the operator's approval, decision or follow-up. \
+Write 'Nothing — ready to approve.' if clean.\n\
+Never end with an empty message or a one-liner.\n",
     );
     p
 }

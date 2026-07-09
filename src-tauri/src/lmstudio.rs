@@ -93,7 +93,7 @@ pub fn run_agent_loop_at(
             crate::runtime::log_task_line(
                 app,
                 task_id,
-                &format!("tool: {name} {}", crate::runtime::truncate(&args.to_string(), 200)),
+                &format!("tool: {name} {}", crate::ollama::loggable_args(&args)),
             );
             let result = exec_tool(app, agent, &task, &name, &args, &mut sends);
             messages.push(json!({

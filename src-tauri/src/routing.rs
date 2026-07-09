@@ -54,7 +54,7 @@ fn route_via_llm(
     Some((agent.id.clone(), format!("{} (picked by router)", agent.name)))
 }
 
-fn ask_ollama(settings: &crate::models::Settings, prompt: &str) -> Option<String> {
+pub(crate) fn ask_ollama(settings: &crate::models::Settings, prompt: &str) -> Option<String> {
     let models = crate::detect::ollama_models(&settings.ollama_url);
     if models.is_empty() {
         return None;
@@ -77,7 +77,7 @@ fn ask_ollama(settings: &crate::models::Settings, prompt: &str) -> Option<String
     v["message"]["content"].as_str().map(str::to_string)
 }
 
-fn ask_openai_compat(base_url: &str, model: &str, prompt: &str, enabled: bool) -> Option<String> {
+pub(crate) fn ask_openai_compat(base_url: &str, model: &str, prompt: &str, enabled: bool) -> Option<String> {
     if !enabled {
         return None;
     }

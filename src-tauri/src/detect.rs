@@ -1,6 +1,6 @@
 use crate::models::Availability;
 use crate::state::AppState;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn find_on_path(bin: &str) -> Option<String> {
     // GUI apps get a minimal PATH on macOS; include the usual suspects on
@@ -19,29 +19,12 @@ fn find_on_path(bin: &str) -> Option<String> {
     None
 }
 
-/// The Claude desktop app bundles the claude-code binary in versioned dirs
-/// (macOS only).
-fn find_claude_desktop_vm() -> Option<String> {
-    if !cfg!(target_os = "macos") {
-        return None;
-    }
-    let vm_dir = crate::platform::home_dir().join("Library/Application Support/Claude/claude-code-vm");
-    let mut versions: Vec<PathBuf> = std::fs::read_dir(&vm_dir)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.join("claude").is_file())
-        .collect();
-    versions.sort();
-    versions.pop().map(|p| p.join("claude").to_string_lossy().into_owned())
-}
-
 pub fn detect_claude() -> Option<String> {
     let local = crate::platform::home_dir().join(".claude").join("local").join("claude");
     if local.is_file() {
         return Some(local.to_string_lossy().into_owned());
     }
-    find_on_path("claude").or_else(find_claude_desktop_vm)
+    find_on_path("claude")
 }
 
 pub fn detect_codex() -> Option<String> {
@@ -84,6 +67,11 @@ pub fn ollama_models(url: &str) -> Vec<String> {
 pub fn availability(state: &AppState) -> Availability {
     let mut settings = state.settings.lock().unwrap().clone();
     let mut changed = false;
+    // Migrate away from the desktop-app VM binary (not host-executable).
+    if settings.claude_path.contains("claude-code-vm") {
+        settings.claude_path = String::new();
+        changed = true;
+    }
     if settings.claude_path.is_empty() {
         if let Some(p) = detect_claude() {
             settings.claude_path = p;
