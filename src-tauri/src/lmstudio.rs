@@ -1,0 +1,119 @@
+//! Driver for OpenAI-compatible local servers (LM Studio, LocalAI,
+//! llama.cpp server, …). Same tools as the Ollama driver; the wire format
+//! differs: tool arguments arrive as a JSON string and tool results must
+//! echo the call id.
+
+use crate::models::*;
+use crate::ollama::{exec_tool, strip_thinking, tool_defs};
+use crate::state::AppState;
+use serde_json::{json, Value};
+use std::time::Duration;
+use tauri::{AppHandle, Manager};
+
+const MAX_ITERATIONS: usize = 16;
+
+pub fn run_agent_loop(
+    app: &AppHandle,
+    task_id: &str,
+    agent: &Agent,
+    settings: &Settings,
+    prompt: &str,
+) -> Result<String, String> {
+    if agent.model.is_empty() {
+        return Err("no model configured for this agent — is the LM Studio server running with a model loaded?".into());
+    }
+    run_agent_loop_at(app, task_id, agent, &settings.lmstudio_url, &agent.model.clone(), prompt)
+}
+
+/// Same loop against any OpenAI-compatible base URL — used by both the
+/// LM Studio backend and the built-in engine.
+pub fn run_agent_loop_at(
+    app: &AppHandle,
+    task_id: &str,
+    agent: &Agent,
+    base_url: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    let tools = tool_defs(agent);
+    let mut messages = vec![json!({"role":"user","content": prompt})];
+    let mut sends: Vec<(String, String)> = vec![];
+    let state = app.state::<AppState>();
+    let task = state
+        .tasks
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|t| t.id == task_id)
+        .cloned()
+        .ok_or("task disappeared")?;
+
+    for _ in 0..MAX_ITERATIONS {
+        if state.cancelled.lock().unwrap().contains(task_id) {
+            return Err("cancelled".into());
+        }
+        let resp = ureq::post(&url)
+            .timeout(Duration::from_secs(600))
+            .send_json(json!({
+                "model": model,
+                "messages": messages,
+                "tools": tools,
+                "stream": false,
+            }))
+            .map_err(|e| format!("LM Studio request failed: {e}"))?;
+        let v: Value = resp
+            .into_json()
+            .map_err(|e| format!("LM Studio bad response: {e}"))?;
+        let msg = v["choices"][0]["message"].clone();
+        let content = msg["content"].as_str().unwrap_or_default().to_string();
+        let tool_calls = msg["tool_calls"].as_array().cloned().unwrap_or_default();
+
+        if tool_calls.is_empty() {
+            return Ok(strip_thinking(&content));
+        }
+        messages.push(msg.clone());
+        for call in &tool_calls {
+            let call_id = call["id"].as_str().unwrap_or_default().to_string();
+            let name = call["function"]["name"].as_str().unwrap_or_default().to_string();
+            // OpenAI format: arguments is a JSON-encoded string.
+            let args: Value = call["function"]["arguments"]
+                .as_str()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_else(|| call["function"]["arguments"].clone());
+            crate::runtime::log_task_line(
+                app,
+                task_id,
+                &format!("tool: {name} {}", crate::runtime::truncate(&args.to_string(), 200)),
+            );
+            let result = exec_tool(app, agent, &task, &name, &args, &mut sends);
+            messages.push(json!({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": result,
+            }));
+        }
+    }
+    // Tool budget exhausted — force a final plain-text answer instead of failing.
+    messages.push(json!({
+        "role": "user",
+        "content": "You have used all available tool calls for this task. Give your final answer now as plain text, summarizing what you did and any results. Do not call any more tools."
+    }));
+    let resp = ureq::post(&url)
+        .timeout(Duration::from_secs(600))
+        .send_json(json!({
+            "model": model,
+            "messages": messages,
+            "stream": false,
+        }))
+        .map_err(|e| format!("LM Studio request failed: {e}"))?;
+    let v: Value = resp
+        .into_json()
+        .map_err(|e| format!("LM Studio bad response: {e}"))?;
+    let content = strip_thinking(v["choices"][0]["message"]["content"].as_str().unwrap_or_default());
+    if content.is_empty() {
+        Err(format!("stopped after {MAX_ITERATIONS} tool iterations without a final answer"))
+    } else {
+        Ok(content)
+    }
+}
