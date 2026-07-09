@@ -424,24 +424,7 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <svg className="brand-logo" viewBox="0 0 100 100" aria-label="Qivreno">
-            <defs>
-              <linearGradient id="qg" x1="50" y1="8" x2="50" y2="92" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stopColor="#00C2FF" />
-                <stop offset="1" stopColor="#2563FF" />
-              </linearGradient>
-              <mask id="qcut">
-                <rect x="-10" y="-10" width="120" height="120" fill="white" />
-                <line x1="62" y1="38" x2="26" y2="74" stroke="black" strokeWidth="22" strokeLinecap="round" />
-              </mask>
-            </defs>
-            <circle cx="50" cy="50" r="33" fill="none" stroke="url(#qg)" strokeWidth="12" mask="url(#qcut)" />
-            <line x1="62" y1="38" x2="26" y2="74" stroke="url(#qg)" strokeWidth="14" strokeLinecap="round" />
-          </svg>
-          <div>
-            <div className="brand-name">QIVRENO</div>
-            <div className="brand-tag">AI Workforce Platform</div>
-          </div>
+          <img className="brand-lockup" src="/logo-white.png" alt="Qivreno — AI Workforce Platform" />
         </div>
         <button className={`nav-item ${view.kind === "board" ? "active" : ""}`} onClick={() => setView({ kind: "board" })}>
           <span className="icon">▦</span> Board
