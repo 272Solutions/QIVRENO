@@ -404,9 +404,9 @@ export default function App() {
   const lic = snap.license;
   const bannerText =
     lic.state === "trial_expired"
-      ? "Your free trial has ended — agents are paused until you enter a license key."
+      ? "Your free trial has ended — subscribe to keep your team working. Your files and agents are safe."
       : lic.state === "expired"
-      ? "Your Qivreno subscription has expired — agents are paused until you enter a renewed key."
+      ? "Your Qivreno subscription has expired — agents are paused until it renews."
       : lic.state === "grace"
       ? `Your subscription has lapsed — ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} of grace remaining.`
       : lic.state === "trial" && lic.days_left <= 5
@@ -418,7 +418,8 @@ export default function App() {
       {bannerText && (
         <div className={`license-banner ${lic.active ? "" : "blocked"}`}>
           <span>{bannerText}</span>
-          <button className="btn sm" onClick={() => setShowSettings(true)}>Enter license</button>
+          <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>Subscribe</button>
+          <button className="btn sm ghost" onClick={() => setShowSettings(true)}>Enter activation code</button>
         </div>
       )}
     <div className="app">
@@ -2177,6 +2178,47 @@ function licenseSummary(lic: LicenseStatus): string {
   }
 }
 
+/** Retention screen shown before a cancellation goes through. */
+function CancelSubscriptionModal(props: {
+  onKeep: () => void;
+  onCancelled: (accessUntil: number) => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const confirmCancel = async () => {
+    setBusy(true);
+    try {
+      const accessUntil = await invoke<number>("cancel_subscription");
+      props.onCancelled(accessUntil);
+    } catch (e) {
+      props.notify(String(e), true);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onKeep(); }}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <h2>Before you go…</h2>
+        <p style={{ marginTop: 6 }}>Cancelling stops the renewal. Here is what that means:</p>
+        <ul style={{ lineHeight: 1.9, paddingLeft: 22, margin: "10px 0 14px" }}>
+          <li>Your team keeps working until the end of the period you already paid for.</li>
+          <li>After that, agents pause. <b>Nothing is deleted</b> — your files, Library, board, and agent memories stay on this Mac.</li>
+          <li>Resubscribing later picks up right where you left off.</li>
+        </ul>
+        <p style={{ color: "var(--dim, #6B7280)", fontSize: 13.5 }}>
+          If something isn't working or the price is the issue, tell us first — hello@qivreno.ai. We read everything and we can usually help.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+          <button className="btn danger sm" disabled={busy} onClick={confirmCancel}>
+            {busy ? "Cancelling…" : "Cancel my renewal"}
+          </button>
+          <button className="btn" onClick={props.onKeep}>Keep my subscription</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsModal(props: {
   settings: Settings;
   license: LicenseStatus;
@@ -2188,6 +2230,8 @@ function SettingsModal(props: {
   const [licKey, setLicKey] = useState(props.settings.license_key);
   const [licStatus, setLicStatus] = useState<LicenseStatus>(props.license);
   const [showTerms, setShowTerms] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelledUntil, setCancelledUntil] = useState(0);
 
   const applyLicense = async () => {
     try {
@@ -2226,10 +2270,43 @@ function SettingsModal(props: {
           </div>
           <div className="hint">
             {props.settings.license_refresh_token
-              ? "Activated on this Mac — your license renews automatically in the background."
+              ? cancelledUntil > 0
+                ? `Renewal cancelled — access continues until ${new Date(cancelledUntil).toLocaleDateString()}.`
+                : "Activated on this Mac — your license renews automatically in the background."
               : "Paste the activation code from your purchase email (it activates this Mac and renews automatically), or a license key issued by 272 Solutions."}
           </div>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 8 }}>
+            {!props.settings.license_refresh_token && licStatus.state !== "licensed" && (
+              <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>
+                Subscribe at qivreno.ai
+              </button>
+            )}
+            {props.settings.license_refresh_token && cancelledUntil === 0 && (
+              <button
+                className="btn link sm"
+                style={{ background: "none", border: "none", color: "var(--dim, #6B7280)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                onClick={() => setShowCancel(true)}
+              >
+                Cancel subscription…
+              </button>
+            )}
+          </div>
         </div>
+        {showCancel && (
+          <CancelSubscriptionModal
+            onKeep={() => setShowCancel(false)}
+            onCancelled={(until) => {
+              setShowCancel(false);
+              setCancelledUntil(until || 1);
+              props.notify(
+                until > 0
+                  ? `Renewal cancelled — your team keeps working until ${new Date(until).toLocaleDateString()}.`
+                  : "Renewal cancelled.",
+              );
+            }}
+            notify={props.notify}
+          />
+        )}
         <div className="field">
           <label>Claude CLI path {props.avail.claude ? "· detected ✓" : "· not found"}</label>
           <input type="text" value={s.claude_path} placeholder="auto-detected if installed" onChange={(e) => setS({ ...s, claude_path: e.target.value })} />

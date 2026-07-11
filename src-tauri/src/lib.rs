@@ -82,6 +82,7 @@ pub fn run() {
             commands::delete_doc,
             commands::set_memory,
             commands::apply_license,
+            commands::cancel_subscription,
             commands::builtin_status,
             commands::builtin_enable,
             commands::builtin_disable,

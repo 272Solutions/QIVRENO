@@ -50,6 +50,36 @@ pub fn call_refresh(server: &str, refresh_token: &str, device_id: &str) -> Resul
     }
 }
 
+/// POST /api/cancel — turns off renewal in Stripe; access continues until the
+/// paid-through date, which is returned as epoch ms.
+pub fn call_cancel(server: &str, refresh_token: &str, device_id: &str) -> Result<u64, String> {
+    let resp = ureq::post(&format!("{}/api/cancel", server.trim_end_matches('/')))
+        .timeout(Duration::from_secs(20))
+        .send_json(json!({ "refresh_token": refresh_token, "device_id": device_id }));
+    let v: Value = match resp {
+        Ok(r) => r.into_json().map_err(|e| e.to_string())?,
+        Err(ureq::Error::Status(_, r)) => r.into_json().map_err(|e| e.to_string())?,
+        Err(e) => return Err(format!("could not reach qivreno.ai: {e}")),
+    };
+    if let Some(err) = v["error"].as_str() {
+        return Err(err.to_string());
+    }
+    Ok(v["access_until"].as_u64().unwrap_or(0))
+}
+
+/// Cancel the subscription renewal for this device's activation.
+pub fn cancel_subscription(app: &AppHandle) -> Result<u64, String> {
+    let state = app.state::<AppState>();
+    let (server, token) = {
+        let s = state.settings.lock().unwrap();
+        (s.license_server.clone(), s.license_refresh_token.clone())
+    };
+    if token.is_empty() {
+        return Err("this Mac was not activated with an activation code".into());
+    }
+    call_cancel(&server, &token, &crate::platform::hardware_uuid())
+}
+
 /// Redeem a QIVACT- code for this machine and store the key + refresh token.
 pub fn activate_with_code(app: &AppHandle, code: &str) -> Result<(), String> {
     let device = crate::platform::hardware_uuid();

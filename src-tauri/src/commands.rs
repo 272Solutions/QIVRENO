@@ -321,6 +321,15 @@ pub async fn apply_license(app: AppHandle, key: String) -> Result<crate::license
     ))
 }
 
+/// Turn off subscription renewal (called after the in-app retention screen).
+/// Access continues until the paid-through date; returns that date (epoch ms).
+#[tauri::command]
+pub async fn cancel_subscription(app: AppHandle) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::activation::cancel_subscription(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn check_availability(app: AppHandle) -> Availability {
     let state = app.state::<AppState>();
