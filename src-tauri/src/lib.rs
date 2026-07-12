@@ -90,6 +90,7 @@ pub fn run() {
             commands::apply_license,
             commands::cancel_subscription,
             commands::provide_input,
+            commands::set_agent_enabled,
             commands::builtin_status,
             commands::builtin_enable,
             commands::builtin_disable,

@@ -67,12 +67,15 @@ pub fn submit_task(
     let state = app.state::<AppState>();
     license_ok(&state)?;
     let agent_id = match &agent_key {
-        Some(key) => Some(
-            state
+        Some(key) => {
+            let a = state
                 .resolve_agent(key)
-                .ok_or_else(|| format!("no agent named '{key}'"))?
-                .id,
-        ),
+                .ok_or_else(|| format!("no agent named '{key}'"))?;
+            if !a.enabled {
+                return Err(format!("{} is disabled — enable them from the team list first", a.name));
+            }
+            Some(a.id)
+        }
         None => None,
     };
     let needs_routing = agent_id.is_none();
@@ -300,11 +303,13 @@ pub fn ensure_qivvy(app: &AppHandle) {
             id: Uuid::new_v4().to_string(),
             name: "Qivvy".into(),
             role: "Project Manager".into(),
-            skills: "project management: take large or multi-part requests, break them into clear subtasks with create_subtask, delegate each piece to the best-suited teammate, track progress on the board, integrate the pieces into one coherent deliverable, flag risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication".into(),
+            skills: "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication".into(),
             backend: crate::models::BackendKind::Builtin,
             model: String::new(),
             permission: crate::models::Permission::Sandboxed,
             color: "#f2a65a".into(),
+            system: true,
+            enabled: true,
             created_at: now_ms(),
         };
         state.agents.lock().unwrap().push(agent);
@@ -714,6 +719,18 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         ws = workspace.display(),
         sh = shared.display(),
     );
+    if agent.system && agent.name.eq_ignore_ascii_case("Qivvy") {
+        p.push_str(
+            "\nYOU ARE THE COORDINATOR, NOT AN EXECUTOR. You never produce domain deliverables \
+             (documents, copy, analyses, code) yourself. For EVERY piece of executable work — even \
+             a task that looks like one specialist's job — digest it, then hand it off with \
+             create_subtask to the right teammate (or leave assignee empty for best-fit routing). \
+             Your own output is limited to: the work breakdown, delegation briefs, progress \
+             tracking, integrating teammates' results into the final package, and a status \
+             summary for the operator. If the team lacks the needed role, hire one with \
+             create_agent, then delegate to them.\n",
+        );
+    }
     match agent.backend {
         BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio => p.push_str(
             "Address the shared folder with the Shared/ path prefix in your file tools \
@@ -1123,6 +1140,40 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
         }
     }
     state.save_tasks();
+
+    // Onboarding complete? The Concierge steps back once the Business Profile
+    // exists and a real team has been hired; re-enable it any time from the
+    // team list for admin/setup help.
+    if let Some((_, agent)) = &reply_ctx {
+        if agent.name.eq_ignore_ascii_case("Concierge") && agent.enabled {
+            let profile_saved = state
+                .docs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|d| d.title.eq_ignore_ascii_case("Business Profile"));
+            let team_hired = state.agents.lock().unwrap().iter().any(|a| !a.system);
+            if profile_saved && team_hired {
+                let no_open_work = !state.tasks.lock().unwrap().iter().any(|t| {
+                    t.agent_id.as_deref() == Some(agent.id.as_str())
+                        && matches!(t.status.as_str(), "routing" | "queued" | "running" | "waiting")
+                });
+                if no_open_work {
+                    if let Some(a) = state.agents.lock().unwrap().iter_mut().find(|a| a.id == agent.id) {
+                        a.enabled = false;
+                    }
+                    state.save_agents();
+                    push_message(
+                        &state,
+                        &agent.id,
+                        "user",
+                        "Setup is done, so I'm stepping back — your team takes it from here. If you ever need help with settings, backends, or how anything works, re-enable me from the team list.",
+                        0,
+                    );
+                }
+            }
+        }
+    }
 
     // Deliver the result: chat replies go to the user, message replies go back
     // to the originating agent (and may trigger their next turn).

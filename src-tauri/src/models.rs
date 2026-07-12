@@ -39,7 +39,17 @@ pub struct Agent {
     pub permission: Permission,
     #[serde(default)]
     pub color: String,
+    /// Built-in assistants (Qivvy, Concierge): exempt from the agent cap.
+    #[serde(default)]
+    pub system: bool,
+    /// Disabled agents receive no tasks, chats or messages.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     pub created_at: u64,
+}
+
+pub fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

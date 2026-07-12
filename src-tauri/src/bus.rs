@@ -31,6 +31,9 @@ pub fn deliver_message(
     if recipient.id == sender.id {
         return Err("you cannot message yourself".into());
     }
+    if !recipient.enabled {
+        return Err(format!("{} is currently disabled and cannot receive messages", recipient.name));
+    }
     runtime::push_message(&state, &sender.id, &recipient.id, body, hop);
     runtime::emit_changed(app);
     let max_hops = state.settings.lock().unwrap().max_hops;

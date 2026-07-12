@@ -354,6 +354,22 @@ pub fn create_agent(app: AppHandle, input: AgentInput) -> Result<Agent, String> 
     create_agent_core(&app, input)
 }
 
+/// Enable or disable an agent. Disabled agents receive no tasks, chats or
+/// messages (the Concierge auto-disables after onboarding and can be
+/// re-enabled here for admin help).
+#[tauri::command]
+pub fn set_agent_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    {
+        let mut agents = state.agents.lock().unwrap();
+        let a = agents.iter_mut().find(|a| a.id == id).ok_or("agent not found")?;
+        a.enabled = enabled;
+    }
+    state.save_agents();
+    runtime::emit_changed(&app);
+    Ok(())
+}
+
 /// Shared by the UI command and by agents staffing up via the bus / tools.
 pub fn create_agent_core(app: &AppHandle, input: AgentInput) -> Result<Agent, String> {
     let state = app.state::<AppState>();
@@ -361,10 +377,12 @@ pub fn create_agent_core(app: &AppHandle, input: AgentInput) -> Result<Agent, St
     if name.is_empty() {
         return Err("agent needs a name".into());
     }
+    // Built-in assistants don't count toward the team size.
+    let system = name.eq_ignore_ascii_case("Qivvy") || name.eq_ignore_ascii_case("Concierge");
     {
         let agents = state.agents.lock().unwrap();
-        if agents.len() >= MAX_AGENTS {
-            return Err(format!("workspace is full ({MAX_AGENTS} agents max)"));
+        if !system && agents.iter().filter(|a| !a.system).count() >= MAX_AGENTS {
+            return Err(format!("workspace is full ({MAX_AGENTS} agents max — Qivvy and the Concierge don't count)"));
         }
         if agents.iter().any(|a| a.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("an agent named '{name}' already exists"));
@@ -379,6 +397,8 @@ pub fn create_agent_core(app: &AppHandle, input: AgentInput) -> Result<Agent, St
         model: input.model.trim().to_string(),
         permission: input.permission,
         color: if input.color.is_empty() { "#6c8cff".into() } else { input.color },
+        system,
+        enabled: true,
         created_at: now_ms(),
     };
     state.workspace_dir(&agent); // create it now

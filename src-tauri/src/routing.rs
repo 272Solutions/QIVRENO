@@ -7,7 +7,16 @@ use std::time::Duration;
 /// then falls back to keyword-overlap scoring. Returns (agent_id, reason).
 pub fn route(state: &AppState, task_id: &str) -> Option<(String, String)> {
     let task = state.tasks.lock().unwrap().iter().find(|t| t.id == task_id).cloned()?;
-    let agents = state.agents.lock().unwrap().clone();
+    // Routing candidates: enabled agents, never the Concierge (setup help
+    // only). Qivvy stays eligible so multi-part projects reach the PM.
+    let agents: Vec<crate::models::Agent> = state
+        .agents
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|a| a.enabled && !a.name.eq_ignore_ascii_case("Concierge"))
+        .cloned()
+        .collect();
     if agents.is_empty() {
         return None;
     }
@@ -19,7 +28,11 @@ pub fn route(state: &AppState, task_id: &str) -> Option<(String, String)> {
     if let Some(pick) = route_via_llm(state, &agents, &text) {
         return Some(pick);
     }
-    Some(route_via_keywords(state, &agents, &text))
+    // Keyword fallback can't judge "multi-part" — keep it to the specialists
+    // so Qivvy's broad skill text doesn't hoover up ordinary tasks.
+    let specialists: Vec<crate::models::Agent> = agents.iter().filter(|a| !a.system).cloned().collect();
+    let pool = if specialists.is_empty() { &agents } else { &specialists };
+    Some(route_via_keywords(state, pool, &text))
 }
 
 fn route_via_llm(
@@ -37,9 +50,12 @@ fn route_via_llm(
     let prompt = format!(
         "You dispatch tasks to the best-suited member of a team of AI agents.\n\
          Team:\n{roster}\n\nTask:\n{}\n\n\
-         Rule: if the task is a large project or spans several specialties (multiple \
+         Rules:\n\
+         - If the task is a large project or spans several specialties (multiple \
          deliverables, several departments, a plan plus execution), pick the Project \
          Manager if the team has one — they break it into subtasks for the others.\n\
+         - NEVER pick the Project Manager for a single-specialty task; give it to the \
+         specialist who owns that kind of work.\n\
          Reply with ONLY the number of the single best-suited agent. No other text.",
         crate::runtime::truncate(text, 2000)
     );

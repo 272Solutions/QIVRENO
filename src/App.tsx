@@ -374,6 +374,9 @@ export default function App() {
     const existing = snap.agents.find((a) => a.name === CONCIERGE.name);
     try {
       let id = existing?.id;
+      if (existing && existing.enabled === false) {
+        await invoke("set_agent_enabled", { id: existing.id, enabled: true });
+      }
       if (!id) {
         const backend = firstAvailableBackend(avail);
         const agent = await invoke<Agent>("create_agent", {
@@ -444,28 +447,29 @@ export default function App() {
         </button>
         <div className="section-label">
           <span>Agents</span>
-          <span>{snap.agents.length}/{MAX_AGENTS}</span>
+          <span>{snap.agents.filter((a) => !a.system).length}/{MAX_AGENTS}</span>
         </div>
         <div className="agent-list">
-          {snap.agents.map((a) => (
+          {[...snap.agents].sort((a, b) => Number(b.system) - Number(a.system)).map((a) => (
             <button
               key={a.id}
               className={`agent-item ${view.kind === "agent" && view.id === a.id ? "active" : ""}`}
+              style={a.enabled === false ? { opacity: 0.45 } : undefined}
               onClick={() => setView({ kind: "agent", id: a.id })}
             >
               <span className={`agent-dot ${workingAgents.has(a.id) ? "working" : ""}`} style={{ background: a.color, color: a.color }} />
               <span style={{ minWidth: 0 }}>
-                <div className="agent-item-name">{a.name}</div>
-                <div className="agent-item-role">{a.role}</div>
+                <div className="agent-item-name">{a.name}{a.system ? " ✦" : ""}</div>
+                <div className="agent-item-role">{a.enabled === false ? "disabled" : a.role}</div>
               </span>
               {workingAgents.has(a.id) && <span className="agent-item-status">working</span>}
             </button>
           ))}
         </div>
-        <button className="add-agent" disabled={snap.agents.length >= MAX_AGENTS} onClick={() => setEditingAgent("new")}>
+        <button className="add-agent" disabled={snap.agents.filter((a) => !a.system).length >= MAX_AGENTS} onClick={() => setEditingAgent("new")}>
           + New Agent
         </button>
-        {snap.agents.length < MAX_AGENTS && (
+        {snap.agents.filter((a) => !a.system).length < MAX_AGENTS && (
           <button className="add-agent quickstart" onClick={() => setShowTemplates(true)}>
             ✨ Quick Start Team
           </button>
@@ -1032,13 +1036,40 @@ function AgentView(props: {
     <>
       <div className="main-header">
         <div>
-          <div className="main-title">{agent.name}</div>
-          <div className="main-sub">{working ? "Working…" : "Idle"}</div>
+          <div className="main-title">{agent.name}{agent.system ? " ✦" : ""}</div>
+          <div className="main-sub">{agent.enabled === false ? "Disabled" : working ? "Working…" : "Idle"}</div>
         </div>
         <div className="spacer" />
+        <button
+          className="btn ghost sm"
+          onClick={async () => {
+            try {
+              await invoke("set_agent_enabled", { id: agent.id, enabled: agent.enabled === false });
+              notify(agent.enabled === false ? `${agent.name} enabled` : `${agent.name} disabled`);
+            } catch (e) {
+              notify(String(e), true);
+            }
+          }}
+        >
+          {agent.enabled === false ? "Enable" : "Disable"}
+        </button>
         <button className="btn ghost sm" onClick={props.onEdit}>Edit</button>
         <ArmButton label="Delete" armedLabel="Really delete?" onConfirm={remove} />
       </div>
+      {agent.enabled === false && (
+        <div className="license-banner">
+          <span>
+            {agent.name} is disabled and won't receive tasks or messages.
+            {agent.name === "Concierge" ? " Re-enable for help with setup, settings or how the app works." : ""}
+          </span>
+          <button
+            className="btn sm"
+            onClick={() => invoke("set_agent_enabled", { id: agent.id, enabled: true }).catch((e) => notify(String(e), true))}
+          >
+            Enable
+          </button>
+        </div>
+      )}
       <div className="main-body">
         <div className="profile">
           <div className="avatar" style={{ background: agent.color }}>
@@ -1927,7 +1958,7 @@ function TemplateModal(props: {
     setChecked(templateDefaultChecked(t, existingNames));
   };
 
-  const slots = MAX_AGENTS - existing.length;
+  const slots = MAX_AGENTS - existing.filter((a) => !a.system).length;
   const selectable = tpl.agents.filter((a) => !existingNames.has(a.name.toLowerCase()));
   const selectedCount = selectable.filter((a) => checked.has(a.name)).length;
   const overCap = selectedCount > slots;

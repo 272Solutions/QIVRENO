@@ -59,8 +59,15 @@ impl AppState {
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
+        let mut agents: Vec<Agent> = load_vec(&data_dir.join("agents.json"));
+        // Migration: built-in assistants created before the system flag existed.
+        for a in agents.iter_mut() {
+            if a.name.eq_ignore_ascii_case("Qivvy") || a.name.eq_ignore_ascii_case("Concierge") {
+                a.system = true;
+            }
+        }
         AppState {
-            agents: Mutex::new(load_vec(&data_dir.join("agents.json"))),
+            agents: Mutex::new(agents),
             tasks: Mutex::new(tasks),
             messages: Mutex::new(load_vec(&data_dir.join("messages.json"))),
             docs: Mutex::new(load_vec(&data_dir.join("docs.json"))),

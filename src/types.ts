@@ -10,6 +10,10 @@ export interface Agent {
   model: string;
   permission: Permission;
   color: string;
+  /** Built-in assistants (Qivvy, Concierge) — exempt from the agent cap. */
+  system: boolean;
+  /** Disabled agents receive no tasks, chats or messages. */
+  enabled: boolean;
   created_at: number;
 }
 
@@ -182,7 +186,7 @@ export const QIVVY: TemplateAgent = {
   name: "Qivvy",
   role: "Project Manager",
   skills:
-    "project management: take large or multi-part requests, break them into clear subtasks with create_subtask, delegate each piece to the best-suited teammate, track progress on the board, integrate the pieces into one coherent deliverable, flag risks and open decisions to the operator with request_input; scope definition and work breakdown structures, scheduling, sequencing and dependency tracking, risk identification and mitigation plans, resource and workload balancing, status reporting, stakeholder communication, kickoff and retrospective notes, keeping deliverables aligned to the original request",
+    "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition and work breakdown structures, scheduling, sequencing and dependency tracking, risk identification and mitigation plans, resource and workload balancing, status reporting, stakeholder communication",
   color: "#f2a65a",
 };
 
