@@ -1,10 +1,12 @@
 mod activation;
 mod builtin;
 mod bus;
+mod calendar;
 mod commands;
 mod detect;
 mod docx;
 mod export;
+mod mail;
 mod pdf;
 mod platform;
 mod pptx;
@@ -16,6 +18,7 @@ mod ollama;
 mod routing;
 mod runtime;
 mod state;
+mod telegram;
 
 use state::AppState;
 use tauri::Manager;
@@ -63,6 +66,9 @@ pub fn run() {
             platform::kill_stray_engines();
             builtin::ensure_started(app.handle());
             activation::start_background_refresh(app.handle());
+            runtime::ensure_qivvy(app.handle());
+            mail::start_watcher(app.handle().clone());
+            telegram::start_bot(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -83,6 +89,7 @@ pub fn run() {
             commands::set_memory,
             commands::apply_license,
             commands::cancel_subscription,
+            commands::provide_input,
             commands::builtin_status,
             commands::builtin_enable,
             commands::builtin_disable,

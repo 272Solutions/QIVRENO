@@ -85,6 +85,8 @@ pub fn submit_task(
         kind,
         status: if needs_routing { "routing" } else { "queued" }.to_string(),
         column: "in_progress".to_string(),
+        parent_id: String::new(),
+        input_request: String::new(),
         result: String::new(),
         log: vec![],
         hop,
@@ -136,13 +138,193 @@ pub fn start_routing(app: &AppHandle, task_id: String) {
     });
 }
 
+/// Sentinel result prefix: an agent paused its task with request_input.
+/// Everything after the prefix is the question for the operator.
+pub const AWAIT_INPUT: &str = "\u{1}QIVRENO_AWAIT_INPUT\u{1}";
+
+/// Spawn a subtask of `parent_id`, delegated by `creator`. Assignee empty →
+/// best-fit routing. The subtask stays linked to its parent on the board and
+/// the creator is notified when it finishes.
+pub fn create_subtask(
+    app: &AppHandle,
+    parent_id: &str,
+    title: &str,
+    details: &str,
+    assignee: &str,
+    creator: &Agent,
+) -> Result<String, String> {
+    if title.trim().is_empty() || details.trim().is_empty() {
+        return Err("subtask needs a title and details".into());
+    }
+    let parent_title = {
+        let state = app.state::<AppState>();
+        let tasks = state.tasks.lock().unwrap();
+        tasks
+            .iter()
+            .find(|t| t.id == parent_id)
+            .map(|t| t.title.clone())
+            .unwrap_or_default()
+    };
+    let prompt = format!(
+        "You have been handed a subtask of the larger project \"{parent_title}\" by {}, who is coordinating it.\n\nYour subtask: {}\n\n{}\n\nDo this piece thoroughly and report a review-ready result — {} will integrate it into the overall project.",
+        creator.name, title.trim(), details.trim(), creator.name
+    );
+    let assignee_key = {
+        let a = assignee.trim();
+        if a.is_empty() || a.eq_ignore_ascii_case("auto") || a.eq_ignore_ascii_case(&creator.name) {
+            None
+        } else {
+            Some(a.to_string())
+        }
+    };
+    let task = submit_task(
+        app,
+        title.trim().to_string(),
+        prompt,
+        assignee_key.clone(),
+        creator.id.clone(),
+        "task".into(),
+        0,
+    )?;
+    {
+        let state = app.state::<AppState>();
+        let mut tasks = state.tasks.lock().unwrap();
+        if let Some(t) = tasks.iter_mut().find(|t| t.id == task.id) {
+            t.parent_id = parent_id.to_string();
+            t.log.push(format!("subtask of '{parent_title}' created by {}", creator.name));
+        }
+        state.save_tasks();
+    }
+    emit_changed(app);
+    Ok(format!(
+        "subtask '{}' (id {}) created and {} — you will receive its result when it finishes",
+        title.trim(),
+        &task.id[..8],
+        match assignee_key {
+            Some(a) => format!("assigned to {a}"),
+            None => "being routed to the best-fit teammate".into(),
+        }
+    ))
+}
+
+/// Resume a requires_input task with the operator's answer. Unassigned
+/// proposals (e.g. from email) are routed to the best-fit agent.
+pub fn provide_input(app: &AppHandle, task_id: &str, answer: &str) -> Result<(), String> {
+    if answer.trim().is_empty() {
+        return Err("answer is empty".into());
+    }
+    let state = app.state::<AppState>();
+    license_ok(&state)?;
+    let needs_routing;
+    {
+        let mut tasks = state.tasks.lock().unwrap();
+        let t = tasks
+            .iter_mut()
+            .find(|t| t.id == task_id && t.column == "requires_input")
+            .ok_or("that task is not waiting for input")?;
+        t.prompt.push_str(&format!(
+            "\n\n--- OPERATOR INPUT ---\nQuestion put to the operator: {}\nThe operator answered: {}\nContinue the task using this answer. Do not ask the same question again.",
+            t.input_request, answer.trim()
+        ));
+        t.input_request = String::new();
+        needs_routing = t.agent_id.is_none();
+        t.status = if needs_routing { "routing" } else { "queued" }.into();
+        t.column = "in_progress".into();
+        t.log.push("operator provided input — resuming".into());
+        t.updated_at = now_ms();
+    }
+    state.save_tasks();
+    emit_changed(app);
+    if needs_routing {
+        start_routing(app, task_id.to_string());
+    } else {
+        schedule(app);
+    }
+    Ok(())
+}
+
+/// Park a brand-new, unassigned task proposal in Requires Input for the
+/// operator to approve (used by the email watcher). Nothing runs until
+/// provide_input is called.
+pub fn propose_task(app: &AppHandle, title: &str, prompt: &str, question: &str) {
+    let state = app.state::<AppState>();
+    {
+        let tasks = state.tasks.lock().unwrap();
+        // Dedupe: an identical open proposal already on the board.
+        if tasks
+            .iter()
+            .any(|t| t.column == "requires_input" && t.title == title && t.status == "waiting")
+        {
+            return;
+        }
+    }
+    let task = Task {
+        id: Uuid::new_v4().to_string(),
+        title: title.to_string(),
+        prompt: prompt.to_string(),
+        agent_id: None,
+        origin: "user".into(),
+        kind: "task".into(),
+        status: "waiting".into(),
+        column: "requires_input".into(),
+        parent_id: String::new(),
+        input_request: question.to_string(),
+        result: String::new(),
+        log: vec!["proposed automatically — waiting for operator approval".into()],
+        hop: 0,
+        created_at: now_ms(),
+        updated_at: now_ms(),
+    };
+    state.tasks.lock().unwrap().push(task);
+    state.save_tasks();
+    emit_changed(app);
+}
+
+/// Seed Qivvy, the default project-manager agent, once per install.
+pub fn ensure_qivvy(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    {
+        let settings = state.settings.lock().unwrap();
+        if settings.qivvy_seeded {
+            return;
+        }
+    }
+    let exists = state
+        .agents
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|a| a.name.eq_ignore_ascii_case("Qivvy"));
+    if !exists {
+        let agent = Agent {
+            id: Uuid::new_v4().to_string(),
+            name: "Qivvy".into(),
+            role: "Project Manager".into(),
+            skills: "project management: take large or multi-part requests, break them into clear subtasks with create_subtask, delegate each piece to the best-suited teammate, track progress on the board, integrate the pieces into one coherent deliverable, flag risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication".into(),
+            backend: crate::models::BackendKind::Builtin,
+            model: String::new(),
+            permission: crate::models::Permission::Sandboxed,
+            color: "#f2a65a".into(),
+            created_at: now_ms(),
+        };
+        state.agents.lock().unwrap().push(agent);
+        state.save_agents();
+    }
+    {
+        let mut settings = state.settings.lock().unwrap();
+        settings.qivvy_seeded = true;
+    }
+    state.save_settings();
+    emit_changed(app);
+}
+
 /// Move a task to a kanban column, on behalf of the operator or an agent.
 /// `key` may be a task id, an id prefix, or an exact title. Moving an
 /// inactive task to in_progress (re)dispatches it.
 pub fn move_task_to(app: &AppHandle, key: &str, column: &str, actor: &str) -> Result<String, String> {
     let column = column.trim().to_lowercase().replace([' ', '-'], "_");
-    if !matches!(column.as_str(), "todo" | "in_progress" | "review" | "done") {
-        return Err(format!("unknown column '{column}' — use todo, in_progress, review or done"));
+    if !matches!(column.as_str(), "todo" | "in_progress" | "review" | "requires_input" | "done") {
+        return Err(format!("unknown column '{column}' — use todo, in_progress, review, requires_input or done"));
     }
     let state = app.state::<AppState>();
     let key_trimmed = key.trim();
@@ -212,7 +394,7 @@ pub fn board_summary(state: &AppState) -> String {
     let tasks = state.tasks.lock().unwrap();
     let agents = state.agents.lock().unwrap();
     let mut lines: Vec<String> = vec![];
-    for col in ["todo", "in_progress", "review", "done"] {
+    for col in ["todo", "in_progress", "review", "requires_input", "done"] {
         lines.push(format!("[{col}]"));
         let mut any = false;
         for t in tasks.iter().filter(|t| t.kind == "task" && t.column == col) {
@@ -339,7 +521,11 @@ fn run_task(app: AppHandle, task_id: String) {
     // agent's own wrap-up is thin, compose one from the evidence (log +
     // the actual files it wrote) using whatever local model is available.
     let outcome = match outcome {
-        Ok(result) if task.kind == "task" && result.trim().len() < 400 => {
+        Ok(result)
+            if task.kind == "task"
+                && result.trim().len() < 400
+                && !result.starts_with(AWAIT_INPUT) =>
+        {
             log_task_line(&app, &task_id, "composing review report…");
             match compose_report(&app, &task_id, &agent, &result) {
                 Some(report) => Ok(report),
@@ -568,13 +754,24 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
     }
     match agent.backend {
         BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio => p.push_str(
-            "\nThe team shares a kanban board (columns: todo, in_progress, review, done). \
+            "\nThe team shares a kanban board (columns: todo, in_progress, review, requires_input, done). \
              Use the list_board tool to see it and the move_task tool to move a task \
              (e.g. move a teammate's reviewed work to done). Tasks you complete move to \
-             review automatically — do not move your own current task.\n",
+             review automatically — do not move your own current task.\n\
+             \nLarge or multi-part projects: use the create_subtask tool to split the work and \
+             delegate pieces to the best-suited teammates. Each subtask stays linked to your task \
+             and its result comes back to you; you integrate everything into the final deliverable.\n\
+             \nIf you are blocked on a decision or missing information only the operator has, use the \
+             request_input tool with ONE complete question — your task parks in Requires Input and \
+             resumes automatically when they answer. Use it sparingly; prefer sensible assumptions \
+             (and state them) for anything reversible.\n\
+             \nThe operator's calendar is available: calendar_events shows their upcoming schedule \
+             (deadlines, meetings, availability); calendar_add_event books meetings, deadlines and \
+             reminders directly into their Calendar. Always check calendar_events before proposing \
+             or booking a time.\n",
         ),
         _ => p.push_str(&format!(
-            "\nThe team shares a kanban board (columns: todo, in_progress, review, done). \
+            "\nThe team shares a kanban board (columns: todo, in_progress, review, requires_input, done). \
              To view it: curl -s http://127.0.0.1:{port}/board\n\
              To move a task on it: curl -s -X POST http://127.0.0.1:{port}/board/move \
              -H 'Content-Type: application/json' \
@@ -851,6 +1048,27 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
     let state = app.state::<AppState>();
     let was_cancelled = state.cancelled.lock().unwrap().remove(task_id);
     let mut reply_ctx: Option<(Task, Agent)> = None;
+    // request_input pause: park the task instead of completing it.
+    if let Ok(result) = &outcome {
+        if let Some(question) = result.strip_prefix(AWAIT_INPUT) {
+            if !was_cancelled {
+                {
+                    let mut tasks = state.tasks.lock().unwrap();
+                    if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
+                        t.status = "waiting".into();
+                        t.column = "requires_input".into();
+                        t.input_request = question.trim().to_string();
+                        t.log.push("paused: waiting for operator input".into());
+                        t.updated_at = now_ms();
+                    }
+                }
+                state.save_tasks();
+                emit_changed(app);
+                schedule(app);
+                return;
+            }
+        }
+    }
     {
         let mut tasks = state.tasks.lock().unwrap();
         if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
@@ -909,7 +1127,31 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
     // Deliver the result: chat replies go to the user, message replies go back
     // to the originating agent (and may trigger their next turn).
     if let Some((task, agent)) = reply_ctx {
-        if task.kind == "chat" {
+        if task.kind == "task" && !task.parent_id.is_empty() && task.origin != "user" {
+            // Completed subtask: hand the result back to the coordinating agent.
+            let coordinator = state.agent(&task.origin);
+            if let Some(coord) = coordinator {
+                let hop = task.hop + 1;
+                let max_hops = state.settings.lock().unwrap().max_hops;
+                if hop <= max_hops {
+                    let body = format!(
+                        "Subtask finished: \"{}\" (done by {}).\n\nResult:\n{}\n\nIntegrate this into the overall project. Check the board for remaining subtasks; when everything is done, assemble the final deliverable and summarize the whole project for the operator. Reply NO_REPLY if nothing needs doing yet.",
+                        task.title, agent.name, truncate(&task.result, 4000)
+                    );
+                    push_message(&state, &agent.id, &coord.id, &body, hop);
+                    submit_task(
+                        app,
+                        format!("Subtask done: {}", truncate(&task.title, 40)),
+                        build_message_prompt(&state, &coord.id, &agent.name, &body),
+                        Some(coord.id.clone()),
+                        agent.id.clone(),
+                        "message".into(),
+                        hop,
+                    )
+                    .ok();
+                }
+            }
+        } else if task.kind == "chat" {
             push_message(&state, &agent.id, "user", &task.result, 0);
         } else if task.kind == "message" && task.origin != "user" {
             // NO_REPLY is the agreed way to end an agent-to-agent thread.

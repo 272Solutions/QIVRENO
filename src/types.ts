@@ -13,7 +13,7 @@ export interface Agent {
   created_at: number;
 }
 
-export type Column = "todo" | "in_progress" | "review" | "done";
+export type Column = "todo" | "in_progress" | "review" | "requires_input" | "done";
 
 export interface Task {
   id: string;
@@ -22,8 +22,10 @@ export interface Task {
   agent_id: string | null;
   origin: string;
   kind: "task" | "chat" | "message";
-  status: "draft" | "routing" | "queued" | "running" | "done" | "failed" | "cancelled";
+  status: "draft" | "routing" | "queued" | "running" | "waiting" | "done" | "failed" | "cancelled";
   column: Column;
+  parent_id: string;
+  input_request: string;
   result: string;
   log: string[];
   hop: number;
@@ -60,6 +62,17 @@ export interface Settings {
   license_server: string;
   last_seen_ms: number;
   trial_started_at: number;
+  qivvy_seeded: boolean;
+  mail_enabled: boolean;
+  mail_host: string;
+  mail_port: number;
+  mail_user: string;
+  mail_password: string;
+  mail_allowlist: string;
+  telegram_enabled: boolean;
+  telegram_token: string;
+  telegram_chat_id: number;
+  telegram_pair_code: string;
 }
 
 export interface SharedFile {
@@ -161,90 +174,106 @@ export interface TeamTemplate {
   agents: TemplateAgent[];
 }
 
-/** Additional single-agent templates offered in the New Agent picker. */
+/** Qivvy — the default project-manager agent (seeded automatically on first
+ * launch; kept here so a deleted Qivvy can be re-hired). Skills mirror the
+ * PMI/PMBOK knowledge areas: scope, schedule, cost, quality, resources,
+ * communications, risk, procurement and stakeholder management. */
+export const QIVVY: TemplateAgent = {
+  name: "Qivvy",
+  role: "Project Manager",
+  skills:
+    "project management: take large or multi-part requests, break them into clear subtasks with create_subtask, delegate each piece to the best-suited teammate, track progress on the board, integrate the pieces into one coherent deliverable, flag risks and open decisions to the operator with request_input; scope definition and work breakdown structures, scheduling, sequencing and dependency tracking, risk identification and mitigation plans, resource and workload balancing, status reporting, stakeholder communication, kickoff and retrospective notes, keeping deliverables aligned to the original request",
+  color: "#f2a65a",
+};
+
+/** Additional single-agent templates offered in the New Agent picker.
+ * Skills are grounded in professional-body competency frameworks (ASQ,
+ * ASCM/APICS, OSHA/BCSP, SMRP, PMI, AMA) and current job-description
+ * expectations for each function. */
 export const EXTRA_ROLES: TemplateAgent[] = [
+  QIVVY,
   {
     name: "QE",
     role: "Quality Engineer (Manufacturing)",
     skills:
-      "quality control plans, inspection checklists, SPC and control charts, root-cause analysis (5 Whys, fishbone), CAPA tracking, ISO 9001 documentation, supplier quality audits",
+      "quality engineering per the ASQ CQE body of knowledge: quality control plans and PPAP-style part approval, inspection checklists and sampling plans (AQL), SPC and control charts with capability studies (Cp/Cpk), root-cause analysis (5 Whys, fishbone, 8D reports), CAPA tracking and effectiveness checks, ISO 9001 documentation and internal audit prep, supplier quality audits and scorecards, gauge R&R basics, cost-of-quality reporting",
     color: "#e0637c",
   },
   {
     name: "ProcessEng",
     role: "Process Engineer",
     skills:
-      "process mapping and optimization, cycle-time and bottleneck analysis, lean/six-sigma methods, work instructions, equipment utilization, waste reduction",
+      "process mapping and value-stream analysis, cycle-time and bottleneck (theory of constraints) analysis, lean methods (5S, kaizen, standard work, SMED) and six-sigma DMAIC, work instructions and process FMEAs, OEE and equipment-utilization tracking, waste and scrap reduction, line-balancing and takt-time calculations, pilot-run planning for process changes",
     color: "#4cc3d9",
   },
   {
     name: "SupplyChain",
     role: "Supply Chain Manager",
     skills:
-      "demand forecasting, inventory planning, supplier scorecards, lead-time tracking, purchase order management, shortage risk flagging",
+      "supply chain planning per ASCM/APICS practice: demand forecasting and S&OP inputs, inventory planning (safety stock, reorder points, ABC analysis, EOQ), MRP-style material planning, supplier scorecards and dual-sourcing strategy, lead-time tracking and variability analysis, purchase order management and expediting, shortage-risk flagging with mitigation options, landed-cost and total-cost-of-ownership comparisons",
     color: "#8fb573",
   },
   {
     name: "Logistics",
     role: "Logistics Coordinator",
     skills:
-      "shipment scheduling, carrier comparison, freight quotes, customs paperwork prep, delivery tracking and exception handling",
+      "shipment scheduling and consolidation planning, carrier comparison and rate negotiation prep, freight quotes (parcel, LTL, FTL, ocean/air), Incoterms guidance, customs paperwork prep (commercial invoice, HS codes, certificates of origin), delivery tracking and exception handling, claims documentation for damage/loss, warehouse receiving and cross-dock coordination notes",
     color: "#7ea6e0",
   },
   {
     name: "Safety",
     role: "EHS & Safety Officer",
     skills:
-      "safety procedures and toolbox talks, OSHA compliance checklists, incident reports and investigations, PPE requirements, safety training material",
+      "workplace safety per OSHA general-industry expectations: written safety procedures and toolbox talks, OSHA compliance checklists and 300-log guidance, job hazard analyses and risk assessments, incident reports and investigations with corrective actions, PPE assessments and requirements, lockout/tagout and machine-guarding basics, emergency action plans, safety training material and tracking matrices, near-miss programs",
     color: "#f2a65a",
   },
   {
     name: "Maintenance",
     role: "Maintenance Planner",
     skills:
-      "preventive maintenance schedules, spare-parts inventory, downtime logs and analysis, work order writing, equipment lifecycle tracking",
+      "maintenance planning per SMRP practice: preventive-maintenance schedules from manuals and duty cycles, spare-parts inventory with min/max levels and criticality ranking, downtime logs with MTBF/MTTR analysis, work-order writing with parts/tools/steps, backlog management and weekly scheduling, equipment lifecycle and replace-vs-repair analysis, lubrication routes, condition-monitoring checklists",
     color: "#9aa5b1",
   },
   {
     name: "Product",
     role: "Product Manager",
     skills:
-      "product requirements and specs, feature prioritization, user feedback synthesis, competitive teardown, release notes, roadmap communication",
+      "product requirements documents and user stories with acceptance criteria, feature prioritization (RICE, MoSCoW, impact/effort), user feedback synthesis and interview scripts, competitive teardowns and positioning, release notes and launch checklists, roadmap communication by audience, success metrics and North-Star definition, pricing and packaging input, backlog grooming discipline",
     color: "#6c8cff",
   },
   {
     name: "UX",
     role: "UX Designer",
     skills:
-      "user flows, wireframe descriptions, usability heuristics review, copy and microcopy, accessibility checks, design critique",
+      "user flows and journey maps, wireframe descriptions and information architecture, usability heuristics review (Nielsen's 10), usability-test scripts and findings synthesis, copy and microcopy in plain language, accessibility checks (WCAG contrast, keyboard, screen-reader labels), design critique with actionable feedback, empty/error/loading state coverage, design-system consistency",
     color: "#d979b8",
   },
   {
     name: "PR",
     role: "PR & Communications",
     skills:
-      "press releases, media pitches, company announcements, crisis communication drafts, award submissions, internal newsletters",
+      "press releases in AP style, media pitches and journalist research, company announcements and executive quotes, crisis communication drafts with holding statements, award submissions, internal newsletters and all-hands notes, media kit content, message houses and talking points, interview prep Q&A docs",
     color: "#a685e2",
   },
   {
     name: "BizDev",
     role: "Partnerships & Business Development",
     skills:
-      "partner prospecting, outreach and follow-up, partnership proposals, channel strategy, event and conference planning",
+      "partner prospecting and fit scoring, outreach sequences and follow-up cadences, partnership proposals and one-pagers, channel strategy (referral, reseller, integration), deal memo drafts with revenue-share scenarios, event and conference planning with target-meeting lists, partner onboarding checklists, quarterly partner reviews",
     color: "#5fd4a2",
   },
   {
     name: "FieldService",
     role: "Field Service Coordinator",
     skills:
-      "service call scheduling, technician dispatch notes, service reports, warranty tracking, customer follow-ups after visits",
+      "service call scheduling and route grouping, technician dispatch notes with site history and parts lists, service reports and completion summaries, warranty tracking and claim prep, customer follow-ups after visits, first-time-fix analysis, escalation paths for repeat failures, preventive service contract renewals",
     color: "#ef8354",
   },
   {
     name: "Estimator",
     role: "Estimator (Quoting)",
     skills:
-      "job costing, bill of materials, labor estimates, quote documents, margin checks, win/loss tracking on bids",
+      "job costing with labor/material/overhead breakdowns, bill of materials with vendor pricing, labor estimates from historical actuals, quote documents with assumptions and exclusions stated, margin checks against target thresholds, win/loss tracking on bids with reasons, change-order pricing, quantity takeoffs from specs or drawings",
     color: "#f2d05a",
   },
 ];
@@ -290,49 +319,49 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Sales",
         role: "Sales Manager",
         skills:
-          "lead generation, CRM upkeep, outreach and follow-up emails, qualifying prospects, proposals, quotes, contract negotiation support",
+          "full-funnel sales management: lead generation and ideal-customer profiling, CRM upkeep and pipeline hygiene with stage definitions, outreach and follow-up email sequences, qualifying prospects (budget, authority, need, timeline), discovery-call question guides, proposals and quotes with options, objection-handling scripts, contract negotiation support, pipeline reviews and win-rate/forecast reporting, lost-deal analysis",
         color: "#6c8cff",
       },
       {
         name: "Marketing",
         role: "Marketing Manager",
         skills:
-          "brand and content strategy, social media campaigns, email newsletters, ad copy, SEO, competitor and market research",
+          "brand and content strategy with positioning and messaging pillars, campaign planning with goals and budgets, social media campaigns, email newsletters and nurture flows, ad copy and creative briefs, SEO fundamentals, competitor and market research, marketing calendar ownership, channel performance review (CAC, conversion, engagement), customer persona development",
         color: "#e0637c",
       },
       {
         name: "HR",
         role: "HR Manager",
         skills:
-          "hiring plans, job descriptions, interview processes, onboarding, employee handbook and policies, performance reviews, workplace culture",
+          "HR management aligned to the SHRM competency model (HR expertise, ethical practice, business acumen, relationship management): hiring plans and structured job descriptions, interview processes with scorecards, onboarding checklists and 30/60/90 plans, employee handbook and policies, performance review frameworks and templates, compensation benchmarking prep, employee-relations documentation, engagement and retention initiatives, compliance basics (leave, overtime classification, required postings), workplace culture programs",
         color: "#5fd4a2",
       },
       {
         name: "Accounting",
         role: "Accounting Manager",
         skills:
-          "bookkeeping, invoicing, expense tracking, budgeting, cash-flow forecasts, financial reports, payroll prep, tax season support",
+          "small-business accounting: bookkeeping with a clean chart of accounts, invoicing and AR follow-up, expense tracking and categorization, budgeting vs actuals with variance notes, cash-flow forecasts, monthly financial reports (P&L, balance sheet, cash summary) with plain-English commentary, payroll prep, tax-season document packages for the CPA, month-end close checklists, basic internal controls (approval limits, separation of duties)",
         color: "#f2d05a",
       },
       {
         name: "Legal",
         role: "Legal Advisor",
         skills:
-          "contract drafting and review, NDAs, terms of service, privacy policies, compliance checklists, flagging legal risk (always recommends licensed counsel for final review)",
+          "contract drafting and review with a redline summary of risky clauses, NDAs and service agreements, terms of service and privacy policies, compliance checklists by jurisdiction and industry, IP basics (trademark use, work-for-hire language), employment agreement review, vendor contract comparison, flagging legal risk in plain English with severity (always recommends licensed counsel for final review — never presents work as legal advice)",
         color: "#a685e2",
       },
       {
         name: "Operations",
         role: "Operations Manager",
         skills:
-          "process design and documentation, vendor management, scheduling, logistics, inventory, tooling, day-to-day problem solving",
+          "process design and SOP documentation, vendor management with scorecards and renewal calendars, scheduling and capacity planning, logistics coordination, inventory tracking with reorder points, tooling and software stack decisions, day-to-day problem solving with root-cause habits, KPI dashboards for throughput/cost/quality, business continuity basics, cross-team handoff design",
         color: "#4cc3d9",
       },
       {
         name: "Planning",
         role: "Strategy & Planning Manager",
         skills:
-          "business strategy, quarterly goals and OKRs, project plans, market analysis, competitive positioning, long-term roadmaps",
+          "business strategy and annual planning, quarterly goals and OKRs with measurable key results, project plans with milestones and owners, market analysis (TAM/SAM sizing, trends), competitive positioning and SWOT, long-term roadmaps, scenario planning with assumptions stated, board/investor update drafts, initiative prioritization against strategy, post-mortems on major bets",
         color: "#ef8354",
       },
     ],
@@ -472,14 +501,14 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Support",
         role: "Support Agent",
         skills:
-          "drafting replies to customer questions and complaints, triaging issues by urgency, refund/exchange handling per policy, tone-perfect de-escalation",
+          "drafting replies to customer questions and complaints, triaging issues by urgency and impact, refund/exchange handling per policy, tone-perfect de-escalation, escalation summaries with full context, canned-response library upkeep, spotting recurring issues worth a product or process fix, first-response and resolution-time awareness",
         color: "#6c8cff",
       },
       {
         name: "Success",
         role: "Customer Success Manager",
         skills:
-          "customer onboarding plans, proactive check-ins, churn-risk spotting, upsell/cross-sell suggestions, win-back outreach, testimonial and review requests",
+          "customer success management per current CSM competency standards: onboarding plans with time-to-value milestones, proactive check-ins and QBR-style account reviews, health scoring and churn-risk spotting with save plays, renewal preparation, upsell/cross-sell suggestions tied to usage, win-back outreach, testimonial/review/referral requests, voice-of-customer summaries for the team, NPS and retention tracking",
         color: "#5fd4a2",
       },
       {

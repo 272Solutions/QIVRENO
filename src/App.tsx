@@ -56,7 +56,9 @@ const EMPTY_SNAPSHOT: Snapshot = {
     builtin_port: 0, backend_advice_shown: true, brand_accent: "", brand_text: "",
     terms_accepted_version: 999, terms_accepted_at: 0,
     license_key: "", license_refresh_token: "", license_server: "", last_seen_ms: 0,
-    trial_started_at: 0,
+    trial_started_at: 0, qivvy_seeded: false,
+    mail_enabled: false, mail_host: "", mail_port: 993, mail_user: "", mail_password: "", mail_allowlist: "",
+    telegram_enabled: false, telegram_token: "", telegram_chat_id: 0, telegram_pair_code: "",
   },
   license: { state: "trial", days_left: 14, plan: "trial", customer: "", expires_at: 0, active: true },
 };
@@ -248,6 +250,7 @@ function SetupGuide(props: {
 const COLUMNS: { key: Column; label: string }[] = [
   { key: "todo", label: "To Do" },
   { key: "in_progress", label: "In Progress" },
+  { key: "requires_input", label: "Requires Input" },
   { key: "review", label: "Review" },
   { key: "done", label: "Done" },
 ];
@@ -737,6 +740,14 @@ function KanbanBoard(props: {
                         onClick={() => setDetailId(t.id)}
                       >
                         <div className="kcard-title">{t.title}</div>
+                        {t.parent_id && (
+                          <div className="kcard-snippet" style={{ color: "var(--text-faint)" }}>
+                            ↳ subtask of “{(boardTasks.find((p) => p.id === t.parent_id)?.title ?? "a larger project").slice(0, 50)}”
+                          </div>
+                        )}
+                        {t.column === "requires_input" && t.input_request && (
+                          <InputRequestBox task={t} notify={notify} />
+                        )}
                         {t.status === "done" && t.result && (
                           <div className="kcard-snippet">{t.result.replace(/[#*`>-]/g, "").slice(0, 110)}</div>
                         )}
@@ -769,6 +780,44 @@ function KanbanBoard(props: {
         />
       )}
     </>
+  );
+}
+
+/** Inline question + answer box on a Requires Input card. */
+function InputRequestBox(props: { task: Task; notify: (t: string, e?: boolean) => void }) {
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!answer.trim() || busy) return;
+    setBusy(true);
+    try {
+      await invoke("provide_input", { id: props.task.id, answer });
+      props.notify("Answer sent — task resuming");
+    } catch (e) {
+      props.notify(String(e), true);
+      setBusy(false);
+    }
+  };
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{ margin: "6px 0" }}>
+      <div className="kcard-snippet" style={{ whiteSpace: "pre-wrap", color: "var(--text)" }}>
+        ❓ {props.task.input_request}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+        <input
+          type="text"
+          style={{ flex: 1, minWidth: 0 }}
+          placeholder="Type your answer…"
+          value={answer}
+          disabled={busy}
+          onChange={(e) => setAnswer(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        />
+        <button className="btn sm" disabled={busy || !answer.trim()} onClick={submit}>
+          {busy ? "…" : "Answer"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2400,6 +2449,60 @@ function SettingsModal(props: {
             onChange={(e) => setS({ ...s, max_hops: Math.max(1, Number(e.target.value) || 6) })}
           />
           <div className="hint">Stops two agents from talking to each other forever. After this many back-and-forths, messages are delivered but no longer auto-answered.</div>
+        </div>
+        <div className="field">
+          <label>
+            <input
+              type="checkbox"
+              checked={s.mail_enabled}
+              onChange={(e) => setS({ ...s, mail_enabled: e.target.checked })}
+              style={{ marginRight: 8 }}
+            />
+            Email watching (IMAP) — propose tasks from incoming email
+          </label>
+          {s.mail_enabled && (
+            <>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input type="text" style={{ flex: 2 }} placeholder="IMAP host (e.g. imap.gmail.com)" value={s.mail_host} onChange={(e) => setS({ ...s, mail_host: e.target.value.trim() })} />
+                <input type="number" style={{ width: 90 }} placeholder="993" value={s.mail_port} onChange={(e) => setS({ ...s, mail_port: Number(e.target.value) || 993 })} />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input type="text" style={{ flex: 1 }} placeholder="Email address / username" value={s.mail_user} onChange={(e) => setS({ ...s, mail_user: e.target.value.trim() })} />
+                <input type="password" style={{ flex: 1 }} placeholder="App password" value={s.mail_password} onChange={(e) => setS({ ...s, mail_password: e.target.value })} />
+              </div>
+              <input type="text" style={{ marginTop: 8, width: "100%" }} placeholder="Only these senders (comma-separated, optional — empty = all)" value={s.mail_allowlist} onChange={(e) => setS({ ...s, mail_allowlist: e.target.value })} />
+              <div className="hint">
+                Checks every 5 minutes without marking anything read. New actionable emails become
+                proposals in the Requires Input column — nothing runs until you approve each one, and
+                agents are instructed to treat email content as data, never as instructions. Use an app
+                password (Gmail: myaccount.google.com/apppasswords; Proton: via Proton Mail Bridge). The
+                password is stored only on this Mac.
+              </div>
+            </>
+          )}
+        </div>
+        <div className="field">
+          <label>
+            <input
+              type="checkbox"
+              checked={s.telegram_enabled}
+              onChange={(e) => setS({ ...s, telegram_enabled: e.target.checked })}
+              style={{ marginRight: 8 }}
+            />
+            Telegram remote — text tasks to your team from your phone
+          </label>
+          {s.telegram_enabled && (
+            <>
+              <input type="password" style={{ marginTop: 8, width: "100%" }} placeholder="Bot token from @BotFather" value={s.telegram_token} onChange={(e) => setS({ ...s, telegram_token: e.target.value.trim() })} />
+              <div className="hint">
+                {props.settings.telegram_chat_id !== 0
+                  ? "Paired ✓ — message your bot from Telegram and tasks route to the team. Prefix with 'ask AgentName:' to pick the agent."
+                  : props.settings.telegram_pair_code
+                  ? `Not paired yet. In Telegram, open your bot and send it this code: ${props.settings.telegram_pair_code}`
+                  : "Create a bot in Telegram: message @BotFather → /newbot → paste the token here and Save. A pairing code will appear here."}
+              </div>
+            </>
+          )}
         </div>
         <div className="hint" style={{ marginBottom: 4 }}>
           <button className="linkish" onClick={() => setShowTerms(true)}>View Terms &amp; Conditions</button>

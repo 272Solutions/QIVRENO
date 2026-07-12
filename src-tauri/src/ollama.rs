@@ -24,6 +24,10 @@ pub(crate) fn tool_defs(agent: &Agent) -> Vec<Value> {
         json!({"type":"function","function":{"name":"save_process","description":"Save or update a repeatable process in the library so any teammate can follow it later. Write clear numbered steps.","parameters":{"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string","description":"The full process: purpose, numbered steps, tips"}},"required":["title","content"]}}}),
         json!({"type":"function","function":{"name":"update_memory","description":"Update memory. scope 'self': REPLACE your private memory with a refined full version (merge new durable facts, prune stale ones). scope 'shared': add ONE short fact every teammate should know.","parameters":{"type":"object","properties":{"scope":{"type":"string","enum":["self","shared"]},"content":{"type":"string"}},"required":["scope","content"]}}}),
         json!({"type":"function","function":{"name":"create_agent","description":"Hire a new teammate agent (they use the same AI backend as you, sandboxed). Use only when the team is missing a needed role.","parameters":{"type":"object","properties":{"name":{"type":"string","description":"Short name, e.g. 'Sales'"},"role":{"type":"string"},"skills":{"type":"string","description":"Comma-separated skills, used to route tasks to them"}},"required":["name","role","skills"]}}}),
+        json!({"type":"function","function":{"name":"create_subtask","description":"Break the project you are working on into a smaller task and hand it to a teammate. The subtask stays linked to your current task on the board and the result comes back to you when it finishes. One call per subtask.","parameters":{"type":"object","properties":{"title":{"type":"string","description":"Short subtask title"},"details":{"type":"string","description":"Everything the teammate needs: goal, inputs, expected deliverable"},"assignee":{"type":"string","description":"Teammate agent name, or leave empty to route to the best fit"}},"required":["title","details"]}}}),
+        json!({"type":"function","function":{"name":"request_input","description":"Pause your current task and ask the operator a question you genuinely cannot answer yourself (a decision, missing information, an approval). The task moves to the Requires Input column and resumes automatically with their answer. Ask everything you need in ONE clear question, then stop.","parameters":{"type":"object","properties":{"question":{"type":"string","description":"The complete question, with enough context for the operator to answer it cold"}},"required":["question"]}}}),
+        json!({"type":"function","function":{"name":"calendar_events","description":"Read the operator's calendar: upcoming events with dates, times and titles. Use for scheduling context, deadlines and availability.","parameters":{"type":"object","properties":{"days":{"type":"integer","description":"How many days ahead to look (default 7, max 60)"}}}}}),
+        json!({"type":"function","function":{"name":"calendar_add_event","description":"Add an event to the operator's calendar (meeting, deadline, reminder). It appears in their Calendar app immediately.","parameters":{"type":"object","properties":{"title":{"type":"string"},"start":{"type":"string","description":"Start as YYYY-MM-DD HH:MM (24h, operator's local time)"},"duration_minutes":{"type":"integer","description":"Length in minutes (default 60)"},"notes":{"type":"string","description":"Optional description/agenda"}},"required":["title","start"]}}}),
     ];
     if agent.permission == Permission::Full {
         tools.push(json!({"type":"function","function":{"name":"run_command","description":"Run a shell command on this Mac and return its output.","parameters":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}}));
@@ -219,6 +223,33 @@ pub(crate) fn exec_tool(
             crate::commands::create_agent_core(app, input)
                 .map(|a| format!("{} ({}) joined the team", a.name, a.role))
         }
+        "create_subtask" => crate::runtime::create_subtask(
+            app,
+            &task.id,
+            args["title"].as_str().unwrap_or_default(),
+            args["details"].as_str().unwrap_or_default(),
+            args["assignee"].as_str().unwrap_or_default(),
+            agent,
+        ),
+        "request_input" => {
+            let q = args["question"].as_str().unwrap_or_default().trim().to_string();
+            if q.is_empty() {
+                Err("request_input needs a question".into())
+            } else {
+                // The loop turns this into a paused task via the AWAIT_INPUT sentinel.
+                Ok(q)
+            }
+        }
+        "calendar_events" => {
+            let days = args["days"].as_i64().unwrap_or(7).clamp(1, 60);
+            crate::calendar::list_events(days)
+        }
+        "calendar_add_event" => crate::calendar::add_event(
+            args["title"].as_str().unwrap_or_default(),
+            args["start"].as_str().unwrap_or_default(),
+            args["duration_minutes"].as_i64().unwrap_or(60).clamp(5, 24 * 60),
+            args["notes"].as_str().unwrap_or_default(),
+        ),
         "run_command" if !sandboxed => {
             let command = args["command"].as_str().unwrap_or_default();
             run_shell(&workspace, command)
@@ -336,6 +367,10 @@ pub fn run_agent_loop(
             let args = call["function"]["arguments"].clone();
             crate::runtime::log_task_line(app, task_id, &format!("tool: {name} {}", loggable_args(&args)));
             let result = exec_tool(app, agent, &task, &name, &args, &mut sends);
+            if name == "request_input" && !result.starts_with("ERROR:") {
+                // Pause the run; finalize parks the task in Requires Input.
+                return Ok(format!("{}{}", crate::runtime::AWAIT_INPUT, result));
+            }
             messages.push(json!({"role":"tool","content": result, "tool_name": name}));
         }
     }

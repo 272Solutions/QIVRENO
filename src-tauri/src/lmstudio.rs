@@ -96,6 +96,10 @@ pub fn run_agent_loop_at(
                 &format!("tool: {name} {}", crate::ollama::loggable_args(&args)),
             );
             let result = exec_tool(app, agent, &task, &name, &args, &mut sends);
+            if name == "request_input" && !result.starts_with("ERROR:") {
+                // Pause the run; finalize parks the task in Requires Input.
+                return Ok(format!("{}{}", crate::runtime::AWAIT_INPUT, result));
+            }
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": call_id,

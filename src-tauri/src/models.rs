@@ -55,9 +55,15 @@ pub struct Task {
     pub kind: String,
     /// "draft" | "routing" | "queued" | "running" | "done" | "failed" | "cancelled"
     pub status: String,
-    /// Kanban column: "todo" | "in_progress" | "review" | "done".
+    /// Kanban column: "todo" | "in_progress" | "review" | "requires_input" | "done".
     #[serde(default)]
     pub column: String,
+    /// Parent task id when this was spawned as a subtask of a larger project.
+    #[serde(default)]
+    pub parent_id: String,
+    /// The question for the operator while parked in requires_input.
+    #[serde(default)]
+    pub input_request: String,
     #[serde(default)]
     pub result: String,
     #[serde(default)]
@@ -159,6 +165,37 @@ pub struct Settings {
     /// First-launch timestamp; anchors the free trial.
     #[serde(default)]
     pub trial_started_at: u64,
+    /// One-time flag: Qivvy (the default project-manager agent) was seeded.
+    #[serde(default)]
+    pub qivvy_seeded: bool,
+    /// IMAP inbox watching (email → proposed tasks). Password stays local.
+    #[serde(default)]
+    pub mail_enabled: bool,
+    #[serde(default)]
+    pub mail_host: String,
+    #[serde(default = "default_imap_port")]
+    pub mail_port: u16,
+    #[serde(default)]
+    pub mail_user: String,
+    #[serde(default)]
+    pub mail_password: String,
+    /// Optional comma-separated sender allowlist; empty = all senders.
+    #[serde(default)]
+    pub mail_allowlist: String,
+    /// Telegram remote channel (bot token + paired chat).
+    #[serde(default)]
+    pub telegram_enabled: bool,
+    #[serde(default)]
+    pub telegram_token: String,
+    #[serde(default)]
+    pub telegram_chat_id: i64,
+    /// One-time pairing code shown in Settings; a chat pairs by sending it.
+    #[serde(default)]
+    pub telegram_pair_code: String,
+}
+
+pub fn default_imap_port() -> u16 {
+    993
 }
 
 pub fn default_lmstudio_url() -> String {
@@ -198,6 +235,17 @@ impl Default for Settings {
             license_server: default_license_server(),
             last_seen_ms: 0,
             trial_started_at: 0,
+            qivvy_seeded: false,
+            mail_enabled: false,
+            mail_host: String::new(),
+            mail_port: default_imap_port(),
+            mail_user: String::new(),
+            mail_password: String::new(),
+            mail_allowlist: String::new(),
+            telegram_enabled: false,
+            telegram_token: String::new(),
+            telegram_chat_id: 0,
+            telegram_pair_code: String::new(),
         }
     }
 }

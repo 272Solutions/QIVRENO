@@ -523,6 +523,8 @@ pub fn create_task(
         kind: "task".into(),
         status: "draft".into(),
         column: "todo".into(),
+        parent_id: String::new(),
+        input_request: String::new(),
         result: String::new(),
         log: vec![],
         hop: 0,
@@ -538,6 +540,13 @@ pub fn create_task(
 #[tauri::command]
 pub fn move_task(app: AppHandle, id: String, column: String) -> Result<String, String> {
     runtime::move_task_to(&app, &id, &column, "the operator")
+}
+
+/// Answer a task waiting in the Requires Input column; it resumes (or, for
+/// unassigned proposals, gets routed) with the answer appended.
+#[tauri::command]
+pub fn provide_input(app: AppHandle, id: String, answer: String) -> Result<(), String> {
+    runtime::provide_input(&app, &id, &answer)
 }
 
 #[tauri::command]

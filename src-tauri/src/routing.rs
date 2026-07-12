@@ -37,6 +37,9 @@ fn route_via_llm(
     let prompt = format!(
         "You dispatch tasks to the best-suited member of a team of AI agents.\n\
          Team:\n{roster}\n\nTask:\n{}\n\n\
+         Rule: if the task is a large project or spans several specialties (multiple \
+         deliverables, several departments, a plan plus execution), pick the Project \
+         Manager if the team has one — they break it into subtasks for the others.\n\
          Reply with ONLY the number of the single best-suited agent. No other text.",
         crate::runtime::truncate(text, 2000)
     );
