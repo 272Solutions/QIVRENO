@@ -86,6 +86,25 @@ fn js_str(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into())
 }
 
+/// Today's local date + weekday as a human string, e.g.
+/// "Monday, 2026-07-13". Agents need this because a local model has no idea
+/// what today is and would otherwise book events in its training-era year.
+/// Uses the OS `date` command (locale-correct, no date crate needed).
+pub fn today_string() -> String {
+    #[cfg(target_os = "windows")]
+    let out = std::process::Command::new("cmd")
+        .args(["/C", "powershell -NoProfile -Command \"Get-Date -Format 'dddd, yyyy-MM-dd'\""])
+        .output();
+    #[cfg(not(target_os = "windows"))]
+    let out = std::process::Command::new("date").args(["+%A, %Y-%m-%d"]).output();
+
+    out.ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_default()
+}
+
 fn parse_start(start: &str) -> Result<(i32, u32, u32, u32, u32), String> {
     let s = start.trim().replace('T', " ");
     let err = || format!("start must be YYYY-MM-DD HH:MM — got '{start}'");
@@ -134,5 +153,14 @@ mod tests {
         assert!(parse_start("tomorrow at noon").is_err());
         assert!(parse_start("2026-13-01 10:00").is_err());
         assert!(parse_start("2026-07-15").is_err());
+    }
+
+    #[test]
+    fn today_string_is_iso_dated() {
+        let t = super::today_string();
+        // "<Weekday>, YYYY-MM-DD" — assert the ISO date tail parses.
+        assert!(t.contains(", "), "unexpected: {t}");
+        let date = t.split(", ").nth(1).unwrap_or("");
+        assert!(super::parse_start(&format!("{date} 09:00")).is_ok(), "bad date: {t}");
     }
 }

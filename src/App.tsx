@@ -2496,6 +2496,7 @@ function SettingsModal(props: {
             notify={props.notify}
           />
         )}
+        <div className="settings-section">AI backends</div>
         <div className="field">
           <label>Claude CLI path {props.avail.claude ? "· detected ✓" : "· not found"}</label>
           <input type="text" value={s.claude_path} placeholder="auto-detected if installed" onChange={(e) => setS({ ...s, claude_path: e.target.value })} />
@@ -2532,6 +2533,7 @@ function SettingsModal(props: {
             <input type="text" value={s.router_model} onChange={(e) => setS({ ...s, router_model: e.target.value })} />
           )}
         </div>
+        <div className="settings-section">Presentation branding</div>
         <div className="field">
           <label>Deck branding (PowerPoint / PDF presentation exports)</label>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -2590,6 +2592,7 @@ function SettingsModal(props: {
             applies to every presentation export.
           </div>
         </div>
+        <div className="settings-section">Team behavior</div>
         <div className="field">
           <label>Agent-to-agent conversation limit (hops)</label>
           <input
@@ -2598,6 +2601,7 @@ function SettingsModal(props: {
           />
           <div className="hint">Stops two agents from talking to each other forever. After this many back-and-forths, messages are delivered but no longer auto-answered.</div>
         </div>
+        <div className="settings-section">Integrations</div>
         <div className="field">
           <label>
             <input

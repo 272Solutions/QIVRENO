@@ -752,6 +752,12 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         ws = workspace.display(),
         sh = shared.display(),
     );
+    // Local models don't know the current date; state it so scheduling,
+    // deadlines and calendar events use the real year.
+    let today = crate::calendar::today_string();
+    if !today.is_empty() {
+        p.push_str(&format!("Today's date is {today}. Use it for any scheduling, deadlines or calendar events.\n"));
+    }
     if agent.system && agent.name.eq_ignore_ascii_case("Qivvy") {
         p.push_str(
             "\nYOU ARE THE COORDINATOR, NOT AN EXECUTOR. You never produce domain deliverables \
