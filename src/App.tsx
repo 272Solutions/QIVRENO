@@ -51,7 +51,7 @@ function ArmButton(props: {
 const EMPTY_SNAPSHOT: Snapshot = {
   agents: [], tasks: [], messages: [], docs: [], memory: { shared: "", agents: {} },
   settings: {
-    claude_path: "", codex_path: "", gemini_path: "", grok_api_key: "", ollama_url: "", lmstudio_url: "",
+    claude_path: "", codex_path: "", gemini_api_key: "", grok_api_key: "", ollama_url: "", lmstudio_url: "",
     bus_port: 0, max_hops: 6, router_model: "", builtin_enabled: false,
     builtin_port: 0, backend_advice_shown: true, brand_accent: "", brand_text: "",
     terms_accepted_version: 999, terms_accepted_at: 0,
@@ -76,7 +76,7 @@ const BACKEND_SUB: Record<BackendKind, string> = {
   lmstudio: "Local, OpenAI-compatible",
   claude: "Claude Code CLI",
   codex: "Codex CLI",
-  gemini: "Gemini CLI (free tier)",
+  gemini: "Google API key (free tier)",
   grok: "xAI API key",
 };
 
@@ -125,14 +125,14 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
   },
   gemini: {
     title: "Set up Gemini",
-    intro: "Agents drive Google's Gemini CLI. A Google account includes a generous free tier; paid Gemini plans raise the limits.",
+    intro: "Agents call Google's Gemini models with your own API key, using Qivreno's native tools (board, files, calendar, everything). Google's free tier needs no card.",
     steps: [
-      "Install Node.js if you don't have it (nodejs.org), then in Terminal:  npm install -g @google/gemini-cli",
-      "Run  gemini  once in Terminal and sign in with your Google account.",
-      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings (⚙).",
+      "Open Google AI Studio (link below) and click Create API key — a Google account is all you need.",
+      "Paste the key into Settings (⚙) → Gemini API key.",
+      "Pick Gemini as the backend when creating or editing an agent (default model: gemini-2.5-flash; set another in the agent's model field).",
     ],
-    url: "https://github.com/google-gemini/gemini-cli",
-    urlLabel: "Open Gemini CLI on GitHub",
+    url: "https://aistudio.google.com/apikey",
+    urlLabel: "Open aistudio.google.com/apikey",
   },
   grok: {
     title: "Set up Grok",
@@ -231,17 +231,36 @@ function BuiltinPanel(props: { onChanged: () => void }) {
   );
 }
 
+const KEY_BACKENDS: Partial<Record<BackendKind, keyof Settings>> = {
+  gemini: "gemini_api_key",
+  grok: "grok_api_key",
+};
+
 function SetupGuide(props: {
   backend: BackendKind;
   avail: Availability;
   onRecheck: () => void;
 }) {
   const [checking, setChecking] = useState(false);
+  const [key, setKey] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
   if (props.backend === "builtin") {
     return <BuiltinPanel onChanged={props.onRecheck} />;
   }
   const g = GUIDES[props.backend]!;
   const up = props.avail[props.backend];
+  const keyField = KEY_BACKENDS[props.backend];
+  const saveKey = async () => {
+    if (!key.trim() || savingKey) return;
+    setSavingKey(true);
+    try {
+      const snap = await invoke<Snapshot>("get_snapshot");
+      await invoke("update_settings", { settings: { ...snap.settings, [keyField!]: key.trim() } });
+      setKey("");
+      props.onRecheck();
+    } catch { /* status row reflects the result */ }
+    setSavingKey(false);
+  };
   return (
     <div className="guide">
       <div className="guide-title">{g.title}</div>
@@ -249,6 +268,21 @@ function SetupGuide(props: {
       <ol className="guide-steps">
         {g.steps.map((s, i) => <li key={i}>{s}</li>)}
       </ol>
+      {keyField && !up && (
+        <div style={{ display: "flex", gap: 8, margin: "4px 0 10px" }}>
+          <input
+            type="password"
+            style={{ flex: 1 }}
+            placeholder="Paste your API key here"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") saveKey(); }}
+          />
+          <button className="btn sm" disabled={savingKey || !key.trim()} onClick={saveKey}>
+            {savingKey ? "Saving…" : "Save key"}
+          </button>
+        </div>
+      )}
       <div className="guide-actions">
         <button className="btn ghost sm" onClick={() => openUrl(g.url).catch(() => {})}>
           ↗ {g.urlLabel}
@@ -269,6 +303,34 @@ function SetupGuide(props: {
         </span>
       </div>
     </div>
+  );
+}
+
+function BackendPicker(props: {
+  backend: BackendKind;
+  avail: Availability;
+  onPick: (b: BackendKind) => void;
+}) {
+  const groups: { label: string; items: BackendKind[] }[] = [
+    { label: "Private — runs on this Mac", items: ["builtin", "ollama", "lmstudio"] },
+    { label: "Cloud — your own account", items: ["claude", "codex", "gemini", "grok"] },
+  ];
+  return (
+    <>
+      {groups.map((g) => (
+        <div key={g.label} style={{ marginBottom: 8 }}>
+          <div className="hint" style={{ margin: "4px 0 6px" }}>{g.label}</div>
+          <div className="radio-row">
+            {g.items.map((b) => (
+              <button key={b} className={`radio-card ${props.backend === b ? "selected" : ""}`} onClick={() => props.onPick(b)}>
+                <div className="rc-title"><i className={props.avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
+                <div className="rc-sub">{BACKEND_SUB[b]}{!props.avail[b] && " — tap to set up"}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -633,6 +695,17 @@ export default function App() {
 
 /* ------------------------------------------------------------------ */
 
+const OUTCOMES: { label: string; prompt: string }[] = [
+  { label: "📑 Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a polished document in Shared/." },
+  { label: "🔍 Research a prospect", prompt: "Research [company name] before my meeting on [date]. I need: company background, what they likely care about right now, talking points for us, and questions to ask. Deliver a one-page brief to Shared/." },
+  { label: "📣 Develop a marketing plan", prompt: "Develop a 30-day marketing plan for [product/service]. Include the channel mix, a content calendar, three sample posts in our brand voice, and how we'll measure it. Deliver to Shared/." },
+  { label: "📽 Build a presentation", prompt: "Build a presentation about [topic] for [audience]. Roughly 8 slides: the story, supporting numbers, and a clear ask at the end. Deliver as a deck in Shared/ so I can export it to PowerPoint." },
+  { label: "📘 Document a process", prompt: "Document how we [process, e.g. onboard a new client] as a numbered, repeatable process anyone on the team could follow. Ask me what you need to know, then save it to the Library." },
+  { label: "🗺 Plan a project", prompt: "Plan the project: [what you want done]. Break it into workstreams with owners, sequence and dependencies, risks, and a timeline. If it spans several specialties, split it into subtasks for the team." },
+  { label: "📊 Analyze a spreadsheet", prompt: "Analyze the spreadsheet [drop it in Shared/ first, then name it here]. I want the trends, anything unusual, and a short memo with the three decisions the numbers suggest. Deliver analysis and memo to Shared/." },
+  { label: "🏢 Set up my back office", prompt: "Set up my business back office: interview me about the business, then produce our core operating documents (key policies, a client onboarding procedure, a job description template, and a simple KPI review)." },
+];
+
 function KanbanBoard(props: {
   snap: Snapshot;
   agentById: Map<string, Agent>;
@@ -731,6 +804,30 @@ function KanbanBoard(props: {
             <button className="btn ghost" onClick={props.onQuickStart}>✨ Quick Start Team</button>
             <span style={{ margin: "0 10px" }}>or</span>
             <button className="btn ghost" onClick={props.onNewAgent}>+ New Agent</button>
+          </div>
+        ) : boardTasks.length === 0 ? (
+          <div className="empty" style={{ maxWidth: 720, margin: "24px auto" }}>
+            <p style={{ marginBottom: 6, fontSize: 16, color: "var(--text)" }}>
+              <b>What do you need accomplished today?</b>
+            </p>
+            <p style={{ marginBottom: 16, fontSize: 13.5 }}>
+              Pick one to start from a proven brief. Fill in the [brackets], then Dispatch —
+              your first reviewed, exportable deliverable is the goal.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+              {OUTCOMES.map((o) => (
+                <button
+                  key={o.label}
+                  className="btn ghost sm"
+                  onClick={() => {
+                    setPrompt(o.prompt);
+                    document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus();
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="kanban">
@@ -2069,14 +2166,7 @@ function TemplateModal(props: {
         </div>
         <div className="field">
           <label>Backend for the whole team (changeable per agent later)</label>
-          <div className="radio-row">
-            {BACKENDS.map((b) => (
-              <button key={b} className={`radio-card ${backend === b ? "selected" : ""}`} onClick={() => setBackend(b)}>
-                <div className="rc-title"><i className={avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
-                <div className="rc-sub">{BACKEND_SUB[b]}{!avail[b] && " — not set up"}</div>
-              </button>
-            ))}
-          </div>
+          <BackendPicker backend={backend} avail={avail} onPick={setBackend} />
         </div>
         {!avail[backend] && <SetupGuide backend={backend} avail={avail} onRecheck={props.onRecheck} />}
         {localModels && localModels.length > 0 && (
@@ -2201,14 +2291,7 @@ function AgentModal(props: {
         </div>
         <div className="field">
           <label>Backend</label>
-          <div className="radio-row">
-            {BACKENDS.map((b) => (
-              <button key={b} className={`radio-card ${backend === b ? "selected" : ""}`} onClick={() => setBackend(b)}>
-                <div className="rc-title"><i className={avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
-                <div className="rc-sub">{BACKEND_SUB[b]}{!avail[b] && " — not set up"}</div>
-              </button>
-            ))}
-          </div>
+          <BackendPicker backend={backend} avail={avail} onPick={setBackend} />
         </div>
         {!avail[backend] && <SetupGuide backend={backend} avail={avail} onRecheck={props.onRecheck} />}
         {localModels && (
@@ -2422,8 +2505,8 @@ function SettingsModal(props: {
           <input type="text" value={s.codex_path} placeholder="npm i -g @openai/codex" onChange={(e) => setS({ ...s, codex_path: e.target.value })} />
         </div>
         <div className="field">
-          <label>Gemini CLI path {props.avail.gemini ? "· detected ✓" : "· not found"}</label>
-          <input type="text" value={s.gemini_path} placeholder="npm i -g @google/gemini-cli" onChange={(e) => setS({ ...s, gemini_path: e.target.value })} />
+          <label>Gemini (Google) API key {props.avail.gemini ? "· configured ✓" : ""}</label>
+          <input type="password" value={s.gemini_api_key} placeholder="from aistudio.google.com/apikey (stored only on this Mac)" onChange={(e) => setS({ ...s, gemini_api_key: e.target.value })} />
         </div>
         <div className="field">
           <label>Grok (xAI) API key {props.avail.grok ? "· configured ✓" : ""}</label>

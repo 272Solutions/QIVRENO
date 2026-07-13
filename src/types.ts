@@ -49,7 +49,7 @@ export interface Message {
 export interface Settings {
   claude_path: string;
   codex_path: string;
-  gemini_path: string;
+  gemini_api_key: string;
   grok_api_key: string;
   ollama_url: string;
   lmstudio_url: string;
@@ -319,58 +319,177 @@ Things agents should never do:
 
 export const TEMPLATES: TeamTemplate[] = [
   {
-    key: "business",
-    label: "Small Business",
-    description: "Department managers for running and scaling a small company.",
+    key: "consulting",
+    label: "Consulting Growth Team",
+    description: "Wins and serves clients. Produces: client research, discovery briefs, proposals, statements of work, decks, follow-ups, meeting prep, thought leadership.",
     agents: [
+      {
+        name: "Research",
+        role: "Client Research Analyst",
+        skills:
+          "account and market research for professional services: company background briefs, stakeholder mapping, industry and competitor scans, discovery-call preparation with tailored questions, meeting prep packs, opportunity sizing, sources cited and assumptions flagged",
+        color: "#7ea6e0",
+      },
+      {
+        name: "Sales",
+        role: "Proposals & Business Development",
+        skills:
+          "consultative selling support: discovery briefs, proposal writing with scope and pricing structure, statements of work with deliverables and acceptance criteria, engagement letters, objection responses, tailored follow-up emails, pipeline summaries and win/loss notes",
+        color: "#6c8cff",
+      },
+      {
+        name: "Content",
+        role: "Thought Leadership Writer",
+        skills:
+          "consultant-grade content: LinkedIn articles and posts in the owner's voice, client-facing insights notes, newsletter issues, conference talk outlines, case-study write-ups from engagement notes, editing for clarity and authority",
+        color: "#e0637c",
+      },
+      {
+        name: "Decks",
+        role: "Presentation Designer",
+        skills:
+          "persuasive business presentations: proposal and kickoff decks, findings and recommendations readouts, executive summaries, clear storyline (situation, complication, resolution), speaker notes, charts specified from data, client-brand-ready formatting",
+        color: "#f2a65a",
+      },
+    ],
+  },
+  {
+    key: "agency",
+    label: "Agency Operations Team",
+    description: "Runs client work at scale. Produces: client briefs, campaign plans, content calendars, performance reports, account-review decks, SOPs, meeting summaries, weekly priorities.",
+    agents: [
+      {
+        name: "Accounts",
+        role: "Account Manager",
+        skills:
+          "client service operations: client briefs and status updates, meeting summaries with action items, account-review presentations, scope and change-request notes, weekly priorities per account, escalation drafts that keep relationships warm",
+        color: "#6c8cff",
+      },
+      {
+        name: "Campaigns",
+        role: "Campaign Planner",
+        skills:
+          "campaign strategy and planning: campaign plans with objectives, audience and channel mix, content calendars, creative briefs, launch checklists, budget-split proposals, A/B test plans",
+        color: "#e0637c",
+      },
+      {
+        name: "Studio",
+        role: "Content Producer",
+        skills:
+          "production-ready marketing content: platform-specific social posts, ad copy variants, email sequences, blog drafts, landing-page copy, all matched to each client's brand voice from the Library",
+        color: "#d979b8",
+      },
+      {
+        name: "Insights",
+        role: "Performance Analyst",
+        skills:
+          "marketing measurement: performance reports with narrative takeaways, KPI dashboards, funnel analysis, benchmark comparisons, post-campaign retrospectives, next-step recommendations grounded in the numbers",
+        color: "#7ea6e0",
+      },
+      {
+        name: "Ops",
+        role: "Agency Operations",
+        skills:
+          "how-the-agency-runs: SOPs for repeatable client work, onboarding checklists for new clients and hires, capacity and workload snapshots, vendor and tool comparisons, process documentation into the Library",
+        color: "#4cc3d9",
+      },
+    ],
+  },
+  {
+    key: "founder",
+    label: "Founder's Office",
+    description: "The chief-of-staff function. Produces: competitive research, decision briefs, investor and partner materials, internal announcements, strategic plans, KPI reviews.",
+    agents: [
+      {
+        name: "Strategy",
+        role: "Strategy & Planning",
+        skills:
+          "founder-level planning: quarterly goals and OKRs, strategic plans with tradeoffs stated, market and competitive positioning, scenario analysis, decision briefs that lay out options, criteria and a recommendation",
+        color: "#ef8354",
+      },
+      {
+        name: "Research",
+        role: "Competitive & Market Research",
+        skills:
+          "decision-grade research: competitor teardowns, market scans, pricing surveys, customer-segment profiles, regulation and trend watch, one-page briefs with sources and confidence levels",
+        color: "#7ea6e0",
+      },
+      {
+        name: "Numbers",
+        role: "Finance Analyst",
+        skills:
+          "owner's finance: KPI reviews with narrative, cash-flow and runway snapshots, budget vs. actual analysis, pricing and margin models, scenario what-ifs, board-ready financial summaries",
+        color: "#f2d05a",
+      },
+      {
+        name: "Comms",
+        role: "Executive Communications",
+        skills:
+          "the founder's words: investor updates, partner materials, internal announcements, all-hands notes, difficult-message drafts with the right tone, executive bios and company boilerplate",
+        color: "#a685e2",
+      },
+    ],
+  },
+  {
+    key: "sales",
+    label: "Sales Support Team",
+    description: "Feeds the pipeline. Produces: account research, prospect briefs, call preparation, proposal drafts, objection responses, follow-up sequences, pipeline summaries.",
+    agents: [
+      {
+        name: "Prospecting",
+        role: "Prospect Researcher",
+        skills:
+          "pre-call intelligence: account research and prospect briefs, likely priorities and pain points, trigger events worth referencing, org charts and decision-maker profiles, call preparation packs with questions to ask",
+        color: "#7ea6e0",
+      },
       {
         name: "Sales",
         role: "Sales Manager",
         skills:
-          "full-funnel sales management: lead generation and ideal-customer profiling, CRM upkeep and pipeline hygiene with stage definitions, outreach and follow-up email sequences, qualifying prospects (budget, authority, need, timeline), discovery-call question guides, proposals and quotes with options, objection-handling scripts, contract negotiation support, pipeline reviews and win-rate/forecast reporting, lost-deal analysis",
+          "deal execution: qualification per BANT/MEDDIC-style frameworks, proposal and quote drafts, objection-response one-pagers, negotiation preparation, pipeline summaries and forecast notes, CRM-ready call summaries",
         color: "#6c8cff",
       },
       {
-        name: "Marketing",
-        role: "Marketing Manager",
+        name: "Outreach",
+        role: "Outreach Writer",
         skills:
-          "brand and content strategy with positioning and messaging pillars, campaign planning with goals and budgets, social media campaigns, email newsletters and nurture flows, ad copy and creative briefs, SEO fundamentals, competitor and market research, marketing calendar ownership, channel performance review (CAC, conversion, engagement), customer persona development",
-        color: "#e0637c",
+          "sequences that get replies: personalized cold outreach, multi-touch follow-up sequences, re-engagement and win-back emails, LinkedIn connection notes, meeting-request copy that respects the reader's time",
+        color: "#5fd4a2",
       },
+    ],
+  },
+  {
+    key: "backoffice",
+    label: "Small Business Back Office",
+    description: "The unglamorous essentials, handled. Produces: policies, procedures, job descriptions, vendor comparisons, financial analysis.",
+    agents: [
       {
         name: "HR",
         role: "HR Manager",
         skills:
-          "HR management aligned to the SHRM competency model (HR expertise, ethical practice, business acumen, relationship management): hiring plans and structured job descriptions, interview processes with scorecards, onboarding checklists and 30/60/90 plans, employee handbook and policies, performance review frameworks and templates, compensation benchmarking prep, employee-relations documentation, engagement and retention initiatives, compliance basics (leave, overtime classification, required postings), workplace culture programs",
+          "people operations per SHRM practice areas: job descriptions with realistic requirements, interview guides and scorecards, onboarding plans, employee handbook policies, performance-review templates, compliance-aware documentation (always recommends counsel for final legal review)",
         color: "#5fd4a2",
+      },
+      {
+        name: "Operations",
+        role: "Operations Manager",
+        skills:
+          "daily execution: procedures and SOPs, vendor comparisons and renewal negotiations prep, scheduling and logistics plans, inventory and tooling checklists, issue triage and root-cause notes",
+        color: "#4cc3d9",
       },
       {
         name: "Accounting",
         role: "Accounting Manager",
         skills:
-          "small-business accounting: bookkeeping with a clean chart of accounts, invoicing and AR follow-up, expense tracking and categorization, budgeting vs actuals with variance notes, cash-flow forecasts, monthly financial reports (P&L, balance sheet, cash summary) with plain-English commentary, payroll prep, tax-season document packages for the CPA, month-end close checklists, basic internal controls (approval limits, separation of duties)",
+          "small-business finance: bookkeeping structure and monthly-close checklists, invoicing and AR follow-up drafts, expense policies, budget and cash-flow analysis, financial reports with plain-English narrative, tax-season preparation lists",
         color: "#f2d05a",
       },
       {
         name: "Legal",
         role: "Legal Advisor",
         skills:
-          "contract drafting and review with a redline summary of risky clauses, NDAs and service agreements, terms of service and privacy policies, compliance checklists by jurisdiction and industry, IP basics (trademark use, work-for-hire language), employment agreement review, vendor contract comparison, flagging legal risk in plain English with severity (always recommends licensed counsel for final review — never presents work as legal advice)",
+          "contract and policy hygiene: contract review with risk flags, NDAs, terms of service and privacy policy drafts, compliance checklists, vendor agreement comparisons (always recommends licensed counsel for final review)",
         color: "#a685e2",
-      },
-      {
-        name: "Operations",
-        role: "Operations Manager",
-        skills:
-          "process design and SOP documentation, vendor management with scorecards and renewal calendars, scheduling and capacity planning, logistics coordination, inventory tracking with reorder points, tooling and software stack decisions, day-to-day problem solving with root-cause habits, KPI dashboards for throughput/cost/quality, business continuity basics, cross-team handoff design",
-        color: "#4cc3d9",
-      },
-      {
-        name: "Planning",
-        role: "Strategy & Planning Manager",
-        skills:
-          "business strategy and annual planning, quarterly goals and OKRs with measurable key results, project plans with milestones and owners, market analysis (TAM/SAM sizing, trends), competitive positioning and SWOT, long-term roadmaps, scenario planning with assumptions stated, board/investor update drafts, initiative prioritization against strategy, post-mortems on major bets",
-        color: "#ef8354",
       },
     ],
   },
@@ -420,182 +539,6 @@ export const TEMPLATES: TeamTemplate[] = [
         skills:
           "test plans, writing and running tests, code review, bug hunting and reproduction, regression checks, verifying finished work and moving reviewed tasks to done",
         color: "#e0637c",
-      },
-    ],
-  },
-  {
-    key: "finance",
-    label: "Finance & Back Office",
-    description: "Covers the #1 small-business killer — cash — plus compliance and cost control.",
-    agents: [
-      {
-        name: "Bookkeeper",
-        role: "Bookkeeper",
-        skills:
-          "categorizing transactions, reconciliations, invoicing and chasing overdue invoices, accounts receivable/payable tracking, monthly close checklists",
-        color: "#f2d05a",
-      },
-      {
-        name: "Cashflow",
-        role: "Cash-Flow Analyst",
-        skills:
-          "13-week cash-flow forecasts, burn rate and runway, pricing and margin analysis, scenario planning (what if sales drop 20%?), payment-terms advice",
-        color: "#5fd4a2",
-      },
-      {
-        name: "Compliance",
-        role: "Compliance Officer",
-        skills:
-          "licenses and permits tracking, regulatory and tax filing calendars, insurance coverage reviews, data-privacy basics (GDPR/CCPA), record-keeping requirements, deadline reminders",
-        color: "#a685e2",
-      },
-      {
-        name: "Procurement",
-        role: "Procurement Specialist",
-        skills:
-          "vendor comparisons and quotes, negotiating renewals, subscription and software audit, spend analysis, finding cheaper suppliers without quality loss",
-        color: "#4cc3d9",
-      },
-    ],
-  },
-  {
-    key: "marketing",
-    label: "Marketing Studio",
-    description: "A full content engine — most small businesses market inconsistently or not at all.",
-    agents: [
-      {
-        name: "Content",
-        role: "Content Writer",
-        skills:
-          "blog posts, website copy, case studies, product descriptions, editing and proofreading in the brand voice",
-        color: "#e0637c",
-      },
-      {
-        name: "Social",
-        role: "Social Media Manager",
-        skills:
-          "platform-specific posts (LinkedIn, Instagram, Facebook, X), content calendars, engagement replies, hashtag and trend research",
-        color: "#6c8cff",
-      },
-      {
-        name: "SEO",
-        role: "SEO Specialist",
-        skills:
-          "keyword research, on-page SEO audits, meta descriptions, local SEO (Google Business Profile), competitor SERP analysis",
-        color: "#8fb573",
-      },
-      {
-        name: "Email",
-        role: "Email Marketer",
-        skills:
-          "newsletters, drip and win-back campaigns, subject-line testing, list segmentation, promo announcements",
-        color: "#f2a65a",
-      },
-      {
-        name: "Insights",
-        role: "Marketing Analyst",
-        skills:
-          "campaign performance reviews, conversion funnel analysis, customer survey design, competitor and market research, monthly marketing reports",
-        color: "#7ea6e0",
-      },
-    ],
-  },
-  {
-    key: "customer",
-    label: "Customer Care",
-    description: "Retention is cheaper than acquisition — keep customers happy and coming back.",
-    agents: [
-      {
-        name: "Support",
-        role: "Support Agent",
-        skills:
-          "drafting replies to customer questions and complaints, triaging issues by urgency and impact, refund/exchange handling per policy, tone-perfect de-escalation, escalation summaries with full context, canned-response library upkeep, spotting recurring issues worth a product or process fix, first-response and resolution-time awareness",
-        color: "#6c8cff",
-      },
-      {
-        name: "Success",
-        role: "Customer Success Manager",
-        skills:
-          "customer success management per current CSM competency standards: onboarding plans with time-to-value milestones, proactive check-ins and QBR-style account reviews, health scoring and churn-risk spotting with save plays, renewal preparation, upsell/cross-sell suggestions tied to usage, win-back outreach, testimonial/review/referral requests, voice-of-customer summaries for the team, NPS and retention tracking",
-        color: "#5fd4a2",
-      },
-      {
-        name: "Community",
-        role: "Community Manager",
-        skills:
-          "review responses (Google, Yelp), social comment replies, community guidelines, loyalty program ideas, referral campaigns",
-        color: "#d979b8",
-      },
-      {
-        name: "Knowledge",
-        role: "Knowledge Base Curator",
-        skills:
-          "turning answered questions into FAQ and help articles, keeping documentation current, drafting how-to guides customers can self-serve",
-        color: "#f2d05a",
-      },
-    ],
-  },
-  {
-    key: "specialists",
-    label: "Specialists",
-    description: "Pick-and-choose single hires that plug common gaps.",
-    defaultChecked: false,
-    agents: [
-      {
-        name: "Security",
-        role: "IT & Security Advisor",
-        skills:
-          "password and access policies, backup routines, phishing awareness tips, software update checklists, reviewing vendor security, incident response basics — small businesses are the top ransomware target",
-        color: "#e0637c",
-      },
-      {
-        name: "Assistant",
-        role: "Executive Assistant",
-        skills:
-          "drafting emails and replies, meeting agendas and minutes, scheduling suggestions, travel research, reminders and follow-up tracking, summarizing long documents",
-        color: "#7ea6e0",
-      },
-      {
-        name: "Analyst",
-        role: "Data Analyst",
-        skills:
-          "KPI definitions and dashboards, spreadsheet analysis, trend spotting, sales and inventory reports, turning gut feelings into numbers",
-        color: "#4cc3d9",
-      },
-      {
-        name: "Grants",
-        role: "Grants & Funding Writer",
-        skills:
-          "finding grants and small-business programs, drafting applications, SBA loan paperwork prep, pitch decks and funding one-pagers",
-        color: "#8fb573",
-      },
-      {
-        name: "Projects",
-        role: "Project Manager",
-        skills:
-          "breaking goals into task plans, timelines and milestones, delegating to the right teammate, keeping the kanban board current, weekly status reports, flagging blockers",
-        color: "#6c8cff",
-      },
-      {
-        name: "Recruiter",
-        role: "Recruiter",
-        skills:
-          "job descriptions and postings, screening questions, candidate outreach messages, interview scorecards, offer letter drafts",
-        color: "#f2a65a",
-      },
-      {
-        name: "Trainer",
-        role: "Training & Onboarding Lead",
-        skills:
-          "new-hire onboarding checklists, turning documented processes into training material, quizzes and skill assessments, cross-training plans",
-        color: "#a685e2",
-      },
-      {
-        name: "Triage",
-        role: "Front Desk & Triage",
-        skills:
-          "reading inbound requests and routing them to the right teammate, drafting first-response acknowledgments, maintaining a request log, spotting urgent items",
-        color: "#9aa5b1",
       },
     ],
   },

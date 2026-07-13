@@ -641,7 +641,22 @@ fn run_backend(
     match agent.backend {
         BackendKind::Claude => run_claude(app, task_id, agent, settings, full_prompt),
         BackendKind::Codex => run_codex(app, task_id, agent, settings, full_prompt),
-        BackendKind::Gemini => run_gemini(app, task_id, agent, settings, full_prompt),
+        BackendKind::Gemini => {
+            let key = settings.gemini_api_key.trim();
+            if key.is_empty() {
+                return Err("Gemini needs a Google AI Studio API key — add it in Settings".into());
+            }
+            let model = if agent.model.is_empty() { "gemini-2.5-flash" } else { &agent.model };
+            crate::lmstudio::run_agent_loop_at(
+                app,
+                task_id,
+                agent,
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+                model,
+                Some(key),
+                full_prompt,
+            )
+        }
         BackendKind::Grok => {
             let key = settings.grok_api_key.trim();
             if key.is_empty() {
@@ -750,7 +765,7 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         );
     }
     match agent.backend {
-        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok => p.push_str(
+        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok | BackendKind::Gemini => p.push_str(
             "Address the shared folder with the Shared/ path prefix in your file tools \
              (e.g. write_file path \"Shared/Q3 Plan.md\").\n",
         ),
@@ -773,7 +788,7 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
     } else {
         p.push_str(&format!("\nYour teammate agents:\n{roster}\n"));
         match agent.backend {
-            BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok => p.push_str(
+            BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok | BackendKind::Gemini => p.push_str(
                 "\nUse the send_message tool to message or delegate work to a teammate. \
                  Replies arrive asynchronously as new tasks for you.\n",
             ),
@@ -788,7 +803,7 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         }
     }
     match agent.backend {
-        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok => p.push_str(
+        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok | BackendKind::Gemini => p.push_str(
             "\nThe team shares a kanban board (columns: todo, in_progress, review, requires_input, done). \
              Use the list_board tool to see it and the move_task tool to move a task \
              (e.g. move a teammate's reviewed work to done). Tasks you complete move to \
@@ -850,7 +865,7 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         own_memory.as_deref().unwrap_or("(empty — build it up as you work)")
     ));
     match agent.backend {
-        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok => p.push_str(
+        BackendKind::Builtin | BackendKind::Ollama | BackendKind::Lmstudio | BackendKind::Grok | BackendKind::Gemini => p.push_str(
             "\nAlways follow the business profile and documented processes. Tools: list_library / \
              read_doc to consult docs; save_process to document any repeatable workflow you perform \
              (check for an existing process first); create_agent only if the team is missing a \
@@ -971,47 +986,6 @@ fn run_child(
     let out = stdout_buf.lock().unwrap().clone();
     let err = stderr_buf.lock().unwrap().clone();
     Ok((status.code().unwrap_or(-1), out, err))
-}
-
-/// Google's Gemini CLI, headless — same integration shape as Claude/Codex:
-/// the CLI brings its own tools; sandboxed agents run under its OS sandbox.
-fn run_gemini(
-    app: &AppHandle,
-    task_id: &str,
-    agent: &Agent,
-    settings: &Settings,
-    prompt: &str,
-) -> Result<String, String> {
-    if settings.gemini_path.is_empty() {
-        return Err("Gemini CLI not found — install it (npm i -g @google/gemini-cli), run `gemini` once to sign in, then set its path in Settings".into());
-    }
-    let state = app.state::<AppState>();
-    let workspace = state.workspace_dir(agent);
-    let mut cmd = Command::new(&settings.gemini_path);
-    cmd.current_dir(&workspace)
-        .arg("--approval-mode")
-        .arg("yolo")
-        .arg("--include-directories")
-        .arg(state.shared_dir());
-    if !agent.model.is_empty() {
-        cmd.arg("-m").arg(&agent.model);
-    }
-    if agent.permission == Permission::Sandboxed {
-        // OS-level sandbox (Seatbelt on macOS) keeps tools inside the
-        // granted directories even in yolo approval mode.
-        cmd.arg("--sandbox");
-    }
-    // -p reads the prompt; we pipe it on stdin to avoid argv length limits.
-    cmd.arg("-p");
-    let (code, out, err) = run_child(app, task_id, cmd, Some(prompt.to_string()))?;
-    let text = out.trim().to_string();
-    if code != 0 && text.is_empty() {
-        return Err(format!("gemini exited with code {code}: {}", tail(&err, 2000)));
-    }
-    if text.is_empty() {
-        return Err("gemini produced no output".into());
-    }
-    Ok(text)
 }
 
 fn run_claude(

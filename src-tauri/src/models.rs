@@ -132,8 +132,9 @@ pub struct Settings {
     pub claude_path: String,
     #[serde(default)]
     pub codex_path: String,
+    /// Google AI Studio API key for the Gemini backend (stored locally).
     #[serde(default)]
-    pub gemini_path: String,
+    pub gemini_api_key: String,
     /// xAI API key for the Grok backend (OpenAI-compatible; stored locally).
     #[serde(default)]
     pub grok_api_key: String,
@@ -235,7 +236,7 @@ impl Default for Settings {
         Settings {
             claude_path: String::new(),
             codex_path: String::new(),
-            gemini_path: String::new(),
+            gemini_api_key: String::new(),
             grok_api_key: String::new(),
             ollama_url: "http://localhost:11434".to_string(),
             lmstudio_url: default_lmstudio_url(),
