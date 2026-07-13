@@ -47,10 +47,28 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci || npm install
 
+      - name: Prepare Apple API key (macOS, signed releases only)
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -n "$APPLE_API_KEY_P8" ]; then
+            mkdir -p ~/.appleconnect
+            echo "$APPLE_API_KEY_P8" | base64 --decode > ~/.appleconnect/AuthKey.p8
+            echo "APPLE_API_KEY_PATH=$HOME/.appleconnect/AuthKey.p8" >> "$GITHUB_ENV"
+          fi
+
       - name: Build app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS Developer ID signing + notarization (no-ops when secrets are
+          # unset — the build stays unsigned, exactly as today).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
           args: ${{ matrix.args }}
           # On tag pushes, attach installers to a draft GitHub release:

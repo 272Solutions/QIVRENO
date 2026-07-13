@@ -2,6 +2,11 @@
   "bundle": {
     "resources": {
       "resources/llama": "llama"
+    },
+    "macOS": {
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist",
+      "minimumSystemVersion": "13.0"
     }
   }
 }

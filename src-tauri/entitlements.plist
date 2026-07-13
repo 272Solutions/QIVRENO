@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Qivreno runs a bundled llama.cpp server and spawns CLI backends
+       (claude/codex/gemini) as child processes. Under the hardened runtime
+       (required for notarization) these entitlements keep those from being
+       killed on launch. -->
+
+  <!-- The bundled engine and CLI shims are separately-signed executables /
+       load dylibs not signed by us; without this the runtime refuses them. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- llama.cpp uses JIT-style executable memory for its compute kernels. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Agents fetch URLs, call local model servers, and reach the license
+       API; the app is an outbound network client. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!-- Optional inbound: the localhost agent bus binds 127.0.0.1 only, but the
+       server socket needs this under the sandbox-adjacent runtime checks. -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+</dict>
+</plist>

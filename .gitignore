@@ -4,3 +4,7 @@ src-tauri/target/
 tools/license-gen/target/
 .DS_Store
 *.log
+
+# Apple signing secrets (never commit)
+.signing.env
+*.p8
