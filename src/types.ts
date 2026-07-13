@@ -1,4 +1,4 @@
-export type BackendKind = "builtin" | "ollama" | "lmstudio" | "claude" | "codex";
+export type BackendKind = "builtin" | "ollama" | "lmstudio" | "claude" | "codex" | "gemini" | "grok";
 export type Permission = "sandboxed" | "full";
 
 export interface Agent {
@@ -49,6 +49,8 @@ export interface Message {
 export interface Settings {
   claude_path: string;
   codex_path: string;
+  gemini_path: string;
+  grok_api_key: string;
   ollama_url: string;
   lmstudio_url: string;
   bus_port: number;
@@ -127,6 +129,8 @@ export interface Availability {
   lmstudio_models: string[];
   claude: boolean;
   codex: boolean;
+  gemini: boolean;
+  grok: boolean;
 }
 
 export interface Doc {

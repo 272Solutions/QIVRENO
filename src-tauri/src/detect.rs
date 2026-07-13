@@ -31,6 +31,10 @@ pub fn detect_codex() -> Option<String> {
     find_on_path("codex")
 }
 
+pub fn detect_gemini() -> Option<String> {
+    find_on_path("gemini")
+}
+
 /// Models exposed by an OpenAI-compatible server (LM Studio, LocalAI, …).
 pub fn lmstudio_models(base_url: &str) -> Vec<String> {
     let url = format!("{}/models", base_url.trim_end_matches('/'));
@@ -84,6 +88,12 @@ pub fn availability(state: &AppState) -> Availability {
             changed = true;
         }
     }
+    if settings.gemini_path.is_empty() {
+        if let Some(p) = detect_gemini() {
+            settings.gemini_path = p;
+            changed = true;
+        }
+    }
     if changed {
         *state.settings.lock().unwrap() = settings.clone();
         state.save_settings();
@@ -98,5 +108,7 @@ pub fn availability(state: &AppState) -> Availability {
         lmstudio_models: lm_models,
         claude: !settings.claude_path.is_empty() && Path::new(&settings.claude_path).is_file(),
         codex: !settings.codex_path.is_empty() && Path::new(&settings.codex_path).is_file(),
+        gemini: !settings.gemini_path.is_empty() && Path::new(&settings.gemini_path).is_file(),
+        grok: !settings.grok_api_key.trim().is_empty(),
     }
 }

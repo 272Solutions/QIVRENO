@@ -22,20 +22,29 @@ pub fn run_agent_loop(
     if agent.model.is_empty() {
         return Err("no model configured for this agent — is the LM Studio server running with a model loaded?".into());
     }
-    run_agent_loop_at(app, task_id, agent, &settings.lmstudio_url, &agent.model.clone(), prompt)
+    run_agent_loop_at(app, task_id, agent, &settings.lmstudio_url, &agent.model.clone(), None, prompt)
 }
 
-/// Same loop against any OpenAI-compatible base URL — used by both the
-/// LM Studio backend and the built-in engine.
+/// Same loop against any OpenAI-compatible base URL — used by the LM Studio
+/// backend, the built-in engine, and hosted OpenAI-compatible APIs (Grok);
+/// `api_key` adds a Bearer header for the hosted case.
 pub fn run_agent_loop_at(
     app: &AppHandle,
     task_id: &str,
     agent: &Agent,
     base_url: &str,
     model: &str,
+    api_key: Option<&str>,
     prompt: &str,
 ) -> Result<String, String> {
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    let post = |body: &Value| {
+        let mut req = ureq::post(&url).timeout(Duration::from_secs(600));
+        if let Some(key) = api_key {
+            req = req.set("Authorization", &format!("Bearer {key}"));
+        }
+        req.send_json(body.clone())
+    };
     let tools = tool_defs(agent);
     let mut messages = vec![json!({"role":"user","content": prompt})];
     let mut sends: Vec<(String, String)> = vec![];
@@ -53,15 +62,13 @@ pub fn run_agent_loop_at(
         if state.cancelled.lock().unwrap().contains(task_id) {
             return Err("cancelled".into());
         }
-        let resp = ureq::post(&url)
-            .timeout(Duration::from_secs(600))
-            .send_json(json!({
-                "model": model,
-                "messages": messages,
-                "tools": tools,
-                "stream": false,
-            }))
-            .map_err(|e| format!("LM Studio request failed: {e}"))?;
+        let resp = post(&json!({
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": false,
+        }))
+        .map_err(|e| format!("backend request failed: {e}"))?;
         let v: Value = resp
             .into_json()
             .map_err(|e| format!("LM Studio bad response: {e}"))?;
@@ -112,14 +119,12 @@ pub fn run_agent_loop_at(
         "role": "user",
         "content": "You have used all available tool calls for this task. Give your final answer now as plain text, summarizing what you did and any results. Do not call any more tools."
     }));
-    let resp = ureq::post(&url)
-        .timeout(Duration::from_secs(600))
-        .send_json(json!({
-            "model": model,
-            "messages": messages,
-            "stream": false,
-        }))
-        .map_err(|e| format!("LM Studio request failed: {e}"))?;
+    let resp = post(&json!({
+        "model": model,
+        "messages": messages,
+        "stream": false,
+    }))
+    .map_err(|e| format!("backend request failed: {e}"))?;
     let v: Value = resp
         .into_json()
         .map_err(|e| format!("LM Studio bad response: {e}"))?;

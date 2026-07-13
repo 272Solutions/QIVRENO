@@ -16,6 +16,8 @@ pub enum BackendKind {
     Lmstudio,
     Claude,
     Codex,
+    Gemini,
+    Grok,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,6 +132,11 @@ pub struct Settings {
     pub claude_path: String,
     #[serde(default)]
     pub codex_path: String,
+    #[serde(default)]
+    pub gemini_path: String,
+    /// xAI API key for the Grok backend (OpenAI-compatible; stored locally).
+    #[serde(default)]
+    pub grok_api_key: String,
     pub ollama_url: String,
     /// Base URL of an OpenAI-compatible local server (LM Studio, LocalAI, llama.cpp…).
     #[serde(default = "default_lmstudio_url")]
@@ -228,6 +235,8 @@ impl Default for Settings {
         Settings {
             claude_path: String::new(),
             codex_path: String::new(),
+            gemini_path: String::new(),
+            grok_api_key: String::new(),
             ollama_url: "http://localhost:11434".to_string(),
             lmstudio_url: default_lmstudio_url(),
             bus_port: 42720,
@@ -269,4 +278,6 @@ pub struct Availability {
     pub lmstudio_models: Vec<String>,
     pub claude: bool,
     pub codex: bool,
+    pub gemini: bool,
+    pub grok: bool,
 }

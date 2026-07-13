@@ -51,7 +51,7 @@ function ArmButton(props: {
 const EMPTY_SNAPSHOT: Snapshot = {
   agents: [], tasks: [], messages: [], docs: [], memory: { shared: "", agents: {} },
   settings: {
-    claude_path: "", codex_path: "", ollama_url: "", lmstudio_url: "",
+    claude_path: "", codex_path: "", gemini_path: "", grok_api_key: "", ollama_url: "", lmstudio_url: "",
     bus_port: 0, max_hops: 6, router_model: "", builtin_enabled: false,
     builtin_port: 0, backend_advice_shown: true, brand_accent: "", brand_text: "",
     terms_accepted_version: 999, terms_accepted_at: 0,
@@ -65,9 +65,10 @@ const EMPTY_SNAPSHOT: Snapshot = {
 
 const NO_AVAIL: Availability = {
   builtin: false, ollama: false, ollama_models: [], lmstudio: false, lmstudio_models: [], claude: false, codex: false,
+  gemini: false, grok: false,
 };
 
-const BACKENDS: BackendKind[] = ["builtin", "ollama", "lmstudio", "claude", "codex"];
+const BACKENDS: BackendKind[] = ["builtin", "ollama", "lmstudio", "claude", "codex", "gemini", "grok"];
 
 const BACKEND_SUB: Record<BackendKind, string> = {
   builtin: "Zero setup — runs on this Mac",
@@ -75,6 +76,8 @@ const BACKEND_SUB: Record<BackendKind, string> = {
   lmstudio: "Local, OpenAI-compatible",
   claude: "Claude Code CLI",
   codex: "Codex CLI",
+  gemini: "Gemini CLI (free tier)",
+  grok: "xAI API key",
 };
 
 interface Guide {
@@ -119,6 +122,28 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     ],
     url: "https://claude.com/product/claude-code",
     urlLabel: "Open claude.com/claude-code",
+  },
+  gemini: {
+    title: "Set up Gemini",
+    intro: "Agents drive Google's Gemini CLI. A Google account includes a generous free tier; paid Gemini plans raise the limits.",
+    steps: [
+      "Install Node.js if you don't have it (nodejs.org), then in Terminal:  npm install -g @google/gemini-cli",
+      "Run  gemini  once in Terminal and sign in with your Google account.",
+      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings (⚙).",
+    ],
+    url: "https://github.com/google-gemini/gemini-cli",
+    urlLabel: "Open Gemini CLI on GitHub",
+  },
+  grok: {
+    title: "Set up Grok",
+    intro: "Agents call xAI's Grok models through your own API key. Unlike the CLIs, Grok uses Qivreno's native tools, so the full board/library/calendar toolset works.",
+    steps: [
+      "Create an xAI account and generate an API key at console.x.ai.",
+      "Paste the key into Settings (⚙) → Grok API key.",
+      "Pick Grok as the backend when creating or editing an agent (default model: grok-4-fast; set another in the agent's model field).",
+    ],
+    url: "https://console.x.ai",
+    urlLabel: "Open console.x.ai",
   },
   codex: {
     title: "Set up Codex",
@@ -265,9 +290,10 @@ function timeAgo(ts: number): string {
 
 const BACKEND_LABEL: Record<BackendKind, string> = {
   builtin: "Built-in AI", ollama: "Ollama", lmstudio: "LM Studio", claude: "Claude", codex: "Codex",
+  gemini: "Gemini", grok: "Grok",
 };
 const BACKEND_DOT: Record<BackendKind, string> = {
-  builtin: "AI", ollama: "Ollama", lmstudio: "LM", claude: "Claude", codex: "Codex",
+  builtin: "AI", ollama: "Ollama", lmstudio: "LM", claude: "Claude", codex: "Codex", gemini: "Gemini", grok: "Grok",
 };
 
 /** Blocking Terms & Conditions gate (or read-only viewer from Settings). */
@@ -2394,6 +2420,14 @@ function SettingsModal(props: {
         <div className="field">
           <label>Codex CLI path {props.avail.codex ? "· detected ✓" : "· not found"}</label>
           <input type="text" value={s.codex_path} placeholder="npm i -g @openai/codex" onChange={(e) => setS({ ...s, codex_path: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Gemini CLI path {props.avail.gemini ? "· detected ✓" : "· not found"}</label>
+          <input type="text" value={s.gemini_path} placeholder="npm i -g @google/gemini-cli" onChange={(e) => setS({ ...s, gemini_path: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Grok (xAI) API key {props.avail.grok ? "· configured ✓" : ""}</label>
+          <input type="password" value={s.grok_api_key} placeholder="xai-… from console.x.ai (stored only on this Mac)" onChange={(e) => setS({ ...s, grok_api_key: e.target.value })} />
         </div>
         <div className="field">
           <label>Ollama URL {props.avail.ollama ? "· connected ✓" : "· not running"}</label>
