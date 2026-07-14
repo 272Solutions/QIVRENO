@@ -42,6 +42,22 @@ fn last_uid_path(app: &AppHandle) -> std::path::PathBuf {
     state.data_dir.join("mail_last_uid.txt")
 }
 
+/// Verify IMAP credentials without saving anything — used by the Connect
+/// Email wizard's "Test connection" button.
+pub fn test_connection(host: &str, port: u16, user: &str, password: &str) -> Result<String, String> {
+    let tls = native_tls::TlsConnector::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+    let client = imap::connect((host, port), host, &tls)
+        .map_err(|e| format!("could not reach {host}:{port} — check the server and port ({e})"))?;
+    let mut session = client
+        .login(user, password)
+        .map_err(|(e, _)| format!("login failed — check the address and app password ({e})"))?;
+    let mailbox = session.select("INBOX").map_err(|e| format!("connected, but couldn't open INBOX: {e}"))?;
+    session.logout().ok();
+    Ok(format!("Connected. INBOX has {} messages.", mailbox.exists))
+}
+
 fn poll_once(
     app: &AppHandle,
     host: &str,

@@ -91,6 +91,7 @@ pub fn run() {
             commands::cancel_subscription,
             commands::provide_input,
             commands::set_agent_enabled,
+            commands::test_mail_connection,
             commands::builtin_status,
             commands::builtin_enable,
             commands::builtin_disable,

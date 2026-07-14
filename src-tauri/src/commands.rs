@@ -357,6 +357,16 @@ pub fn create_agent(app: AppHandle, input: AgentInput) -> Result<Agent, String> 
 /// Enable or disable an agent. Disabled agents receive no tasks, chats or
 /// messages (the Concierge auto-disables after onboarding and can be
 /// re-enabled here for admin help).
+/// Verify IMAP credentials for the Connect Email wizard (nothing is saved).
+#[tauri::command]
+pub async fn test_mail_connection(host: String, port: u16, user: String, password: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::mail::test_connection(&host, port, &user, &password)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn set_agent_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
     let state = app.state::<AppState>();

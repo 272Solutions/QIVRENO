@@ -409,6 +409,34 @@ export default function App() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
+  const [theme, setTheme] = useState<"dark" | "light" | "system">(
+    () => (localStorage.getItem("qiv_theme") as "dark" | "light" | "system") || "system",
+  );
+
+  // ⌘, opens Settings (macOS Preferences convention) — a reliable path
+  // regardless of window chrome.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") { e.preventDefault(); setShowSettings(true); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Apply theme: system follows the OS; light/dark force it.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const light = theme === "light" || (theme === "system" && mq.matches);
+      document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
+    };
+    apply();
+    localStorage.setItem("qiv_theme", theme);
+    if (theme === "system") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+  }, [theme]);
 
   const refresh = useCallback(() => {
     invoke<Snapshot>("get_snapshot").then(setSnap).catch(() => {});
@@ -507,6 +535,10 @@ export default function App() {
       ? `Free trial: ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} left.`
       : null;
 
+  const cycleTheme = () =>
+    setTheme((t) => (t === "system" ? "light" : t === "light" ? "dark" : "system"));
+  const themeIcon = theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "🖥️";
+
   return (
     <div className="app-col">
       {bannerText && (
@@ -575,11 +607,18 @@ export default function App() {
               </button>
             ))}
           </div>
-          <button className="gear" title="Settings" onClick={() => setShowSettings(true)}>⚙</button>
         </div>
       </aside>
 
       <main className="main">
+        <div className="app-toolbar">
+          <button className="header-btn" title={`Theme: ${theme} (click to change)`} onClick={cycleTheme}>
+            {themeIcon}<span className="lbl">{theme[0].toUpperCase() + theme.slice(1)}</span>
+          </button>
+          <button className="header-btn" title="Settings" onClick={() => setShowSettings(true)}>
+            ⚙<span className="lbl">Settings</span>
+          </button>
+        </div>
         {view.kind === "board" && (
           <KanbanBoard
             snap={snap}
@@ -1658,6 +1697,7 @@ function FilesView(props: {
   const [content, setContent] = useState("");
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [query, setQuery] = useState("");
 
   const refresh = useCallback(() => {
     invoke<SharedFile[]>("list_shared_files").then(setFiles).catch(() => {});
@@ -1774,22 +1814,53 @@ function FilesView(props: {
               </button>
             ))}
           </div>
-          <div className="section-label"><span>Shared files</span><span>{files.length}</span></div>
+          {files.length > 0 && (
+            <input
+              className="file-search"
+              type="text"
+              placeholder="🔍 Search files…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
           {files.length === 0 && (
             <div className="lib-empty">
               Nothing yet. Try dispatching: “Create a one-page overview of our services as Shared/Overview.md”.
             </div>
           )}
-          {files.map((f) => (
-            <button
-              key={f.name}
-              className={`lib-item ${selName === f.name ? "active" : ""}`}
-              onClick={() => openFile(f.name)}
-            >
-              <span className="lib-item-title">{KIND_META[fileKind(f.name)].icon} {f.name}</span>
-              <span className="lib-item-sub">{KIND_META[fileKind(f.name)].label} · {timeAgo(f.modified)}</span>
-            </button>
-          ))}
+          {(() => {
+            const q = query.trim().toLowerCase();
+            const shown = files.filter((f) => !q || f.name.toLowerCase().includes(q));
+            const order: { kind: string; label: string }[] = [
+              { kind: "document", label: "Documents" },
+              { kind: "spreadsheet", label: "Spreadsheets" },
+              { kind: "presentation", label: "Presentations" },
+              { kind: "dashboard", label: "Dashboards" },
+              { kind: "other", label: "Other files" },
+            ];
+            if (shown.length === 0) return <div className="lib-empty">No files match “{query}”.</div>;
+            return order.map((grp) => {
+              const inGroup = shown
+                .filter((f) => fileKind(f.name) === grp.kind)
+                .sort((a, b) => b.modified - a.modified);
+              if (inGroup.length === 0) return null;
+              return (
+                <div key={grp.kind}>
+                  <div className="section-label"><span>{grp.label}</span><span>{inGroup.length}</span></div>
+                  {inGroup.map((f) => (
+                    <button
+                      key={f.name}
+                      className={`lib-item ${selName === f.name ? "active" : ""}`}
+                      onClick={() => openFile(f.name)}
+                    >
+                      <span className="lib-item-title">{KIND_META[fileKind(f.name)].icon} {f.name}</span>
+                      <span className="lib-item-sub">{timeAgo(f.modified)}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            });
+          })()}
         </div>
 
         <div className="lib-editor">
@@ -2367,6 +2438,151 @@ function licenseSummary(lic: LicenseStatus): string {
   }
 }
 
+/** Friendly email-connection wizard with provider presets + a real test. */
+const MAIL_PRESETS: { label: string; host: string; port: number; hint: string }[] = [
+  { label: "Gmail", host: "imap.gmail.com", port: 993, hint: "Use an App Password (myaccount.google.com/apppasswords), not your normal password." },
+  { label: "Outlook / Microsoft 365", host: "outlook.office365.com", port: 993, hint: "Create an app password in your Microsoft account security settings." },
+  { label: "iCloud", host: "imap.mail.me.com", port: 993, hint: "Generate an app-specific password at appleid.apple.com." },
+  { label: "Yahoo", host: "imap.mail.yahoo.com", port: 993, hint: "Create an app password in Yahoo Account Security." },
+  { label: "Other (IMAP)", host: "", port: 993, hint: "Enter your provider's IMAP server and port (usually 993)." },
+];
+
+function ConnectEmailModal(props: {
+  settings: Settings;
+  onClose: () => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [preset, setPreset] = useState<string>("");
+  const [s, setS] = useState({
+    host: props.settings.mail_host,
+    port: props.settings.mail_port || 993,
+    user: props.settings.mail_user,
+    password: props.settings.mail_password,
+    allowlist: props.settings.mail_allowlist,
+  });
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const pickPreset = (p: typeof MAIL_PRESETS[number]) => {
+    setPreset(p.label);
+    setS((v) => ({ ...v, host: p.host, port: p.port }));
+    setResult(null);
+  };
+  const hint = MAIL_PRESETS.find((p) => p.label === preset)?.hint;
+
+  const test = async () => {
+    setTesting(true); setResult(null);
+    try {
+      const msg = await invoke<string>("test_mail_connection", { host: s.host, port: s.port, user: s.user, password: s.password });
+      setResult({ ok: true, msg });
+    } catch (e) {
+      setResult({ ok: false, msg: String(e) });
+    }
+    setTesting(false);
+  };
+  const saveAndConnect = async () => {
+    try {
+      await invoke("update_settings", {
+        settings: { ...props.settings, mail_enabled: true, mail_host: s.host, mail_port: s.port, mail_user: s.user, mail_password: s.password, mail_allowlist: s.allowlist },
+      });
+      props.notify("Email connected — new mail becomes task proposals in Requires Input");
+      props.onClose();
+    } catch (e) { props.notify(String(e), true); }
+  };
+
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h2>Connect your email</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Qivreno reads incoming mail and turns real requests into task proposals you approve.
+          Nothing is sent, nothing is marked read, and your password stays on this Mac.
+        </p>
+        <div className="field">
+          <label>Your email provider</label>
+          <div className="radio-row">
+            {MAIL_PRESETS.map((p) => (
+              <button key={p.label} className={`radio-card ${preset === p.label ? "selected" : ""}`} onClick={() => pickPreset(p)}>
+                <div className="rc-title">{p.label}</div>
+              </button>
+            ))}
+          </div>
+          {hint && <div className="hint" style={{ marginTop: 8 }}>{hint}</div>}
+        </div>
+        {(preset === "Other (IMAP)" || !preset) && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <div className="field" style={{ flex: 2 }}>
+              <label>IMAP server</label>
+              <input type="text" placeholder="imap.example.com" value={s.host} onChange={(e) => setS({ ...s, host: e.target.value.trim() })} />
+            </div>
+            <div className="field" style={{ width: 90 }}>
+              <label>Port</label>
+              <input type="number" value={s.port} onChange={(e) => setS({ ...s, port: Number(e.target.value) || 993 })} />
+            </div>
+          </div>
+        )}
+        <div className="field">
+          <label>Email address</label>
+          <input type="text" placeholder="you@example.com" value={s.user} onChange={(e) => setS({ ...s, user: e.target.value.trim() })} />
+        </div>
+        <div className="field">
+          <label>App password</label>
+          <input type="password" placeholder="app password (not your login password)" value={s.password} onChange={(e) => setS({ ...s, password: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Only these senders (optional)</label>
+          <input type="text" placeholder="comma-separated — leave blank for all" value={s.allowlist} onChange={(e) => setS({ ...s, allowlist: e.target.value })} />
+        </div>
+        {result && (
+          <div className={`license-status ${result.ok ? "ok" : "bad"}`} style={{ marginBottom: 10 }}>
+            {result.ok ? "✓ " : "✕ "}{result.msg}
+          </div>
+        )}
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn ghost" disabled={testing || !s.host || !s.user || !s.password} onClick={test}>
+            {testing ? "Testing…" : "Test connection"}
+          </button>
+          <button className="btn" disabled={!result?.ok} onClick={saveAndConnect}>Connect</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Launcher: pick a cloud AI provider, then its inline setup guide. */
+function ConnectAIModal(props: {
+  avail: Availability;
+  onClose: () => void;
+  onRecheck: () => void;
+}) {
+  const [picked, setPicked] = useState<BackendKind | null>(null);
+  const cloud: BackendKind[] = ["claude", "codex", "gemini", "grok"];
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <h2>Connect an AI model</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Qivreno's Built-in AI already runs on this Mac for free. Connect a cloud model for
+          stronger results using your own account.
+        </p>
+        <div className="radio-row">
+          {cloud.map((b) => (
+            <button key={b} className={`radio-card ${picked === b ? "selected" : ""}`} onClick={() => setPicked(b)}>
+              <div className="rc-title"><i className={props.avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
+              <div className="rc-sub">{BACKEND_SUB[b]}{props.avail[b] ? " · connected ✓" : ""}</div>
+            </button>
+          ))}
+        </div>
+        {picked && <div style={{ marginTop: 14 }}><SetupGuide backend={picked} avail={props.avail} onRecheck={props.onRecheck} /></div>}
+        <div className="modal-actions">
+          <button className="btn" onClick={props.onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Retention screen shown before a cancellation goes through. */
 function CancelSubscriptionModal(props: {
   onKeep: () => void;
@@ -2421,6 +2637,8 @@ function SettingsModal(props: {
   const [showTerms, setShowTerms] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [cancelledUntil, setCancelledUntil] = useState(0);
+  const [showConnectEmail, setShowConnectEmail] = useState(false);
+  const [showConnectAI, setShowConnectAI] = useState(false);
 
   const applyLicense = async () => {
     try {
@@ -2497,6 +2715,10 @@ function SettingsModal(props: {
           />
         )}
         <div className="settings-section">AI backends</div>
+        <div className="field">
+          <button className="btn ghost sm" onClick={() => setShowConnectAI(true)}>🤖 Connect an AI model</button>
+          <div className="hint">Guided setup for Claude, Codex, Gemini or Grok — or fill the fields below directly.</div>
+        </div>
         <div className="field">
           <label>Claude CLI path {props.avail.claude ? "· detected ✓" : "· not found"}</label>
           <input type="text" value={s.claude_path} placeholder="auto-detected if installed" onChange={(e) => setS({ ...s, claude_path: e.target.value })} />
@@ -2603,35 +2825,22 @@ function SettingsModal(props: {
         </div>
         <div className="settings-section">Integrations</div>
         <div className="field">
-          <label>
-            <input
-              type="checkbox"
-              checked={s.mail_enabled}
-              onChange={(e) => setS({ ...s, mail_enabled: e.target.checked })}
-              style={{ marginRight: 8 }}
-            />
-            Email watching (IMAP) — propose tasks from incoming email
-          </label>
-          {s.mail_enabled && (
-            <>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <input type="text" style={{ flex: 2 }} placeholder="IMAP host (e.g. imap.gmail.com)" value={s.mail_host} onChange={(e) => setS({ ...s, mail_host: e.target.value.trim() })} />
-                <input type="number" style={{ width: 90 }} placeholder="993" value={s.mail_port} onChange={(e) => setS({ ...s, mail_port: Number(e.target.value) || 993 })} />
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <input type="text" style={{ flex: 1 }} placeholder="Email address / username" value={s.mail_user} onChange={(e) => setS({ ...s, mail_user: e.target.value.trim() })} />
-                <input type="password" style={{ flex: 1 }} placeholder="App password" value={s.mail_password} onChange={(e) => setS({ ...s, mail_password: e.target.value })} />
-              </div>
-              <input type="text" style={{ marginTop: 8, width: "100%" }} placeholder="Only these senders (comma-separated, optional — empty = all)" value={s.mail_allowlist} onChange={(e) => setS({ ...s, mail_allowlist: e.target.value })} />
-              <div className="hint">
-                Checks every 5 minutes without marking anything read. New actionable emails become
-                proposals in the Requires Input column — nothing runs until you approve each one, and
-                agents are instructed to treat email content as data, never as instructions. Use an app
-                password (Gmail: myaccount.google.com/apppasswords; Proton: via Proton Mail Bridge). The
-                password is stored only on this Mac.
-              </div>
-            </>
-          )}
+          <label>Email → task proposals</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn ghost sm" onClick={() => setShowConnectEmail(true)}>
+              {s.mail_enabled ? "Reconfigure email…" : "📧 Connect email"}
+            </button>
+            {s.mail_enabled && (
+              <>
+                <span className="guide-status up">● {s.mail_user || "connected"}</span>
+                <button className="btn ghost sm" onClick={() => setS({ ...s, mail_enabled: false })}>Disconnect</button>
+              </>
+            )}
+          </div>
+          <div className="hint">
+            Reads your inbox every 5 minutes (never marks mail read) and turns real requests into
+            proposals in the Requires Input column — nothing runs until you approve it.
+          </div>
         </div>
         <div className="field">
           <label>
@@ -2667,6 +2876,20 @@ function SettingsModal(props: {
         </div>
       </div>
       {showTerms && <TermsModal viewOnly onClose={() => setShowTerms(false)} notify={props.notify} />}
+      {showConnectEmail && (
+        <ConnectEmailModal
+          settings={s}
+          notify={props.notify}
+          onClose={() => { setShowConnectEmail(false); invoke<Snapshot>("get_snapshot").then((sn) => setS(sn.settings)).catch(() => {}); }}
+        />
+      )}
+      {showConnectAI && (
+        <ConnectAIModal
+          avail={props.avail}
+          onClose={() => setShowConnectAI(false)}
+          onRecheck={() => invoke("check_availability").catch(() => {})}
+        />
+      )}
     </div>
   );
 }
