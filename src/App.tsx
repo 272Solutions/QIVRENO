@@ -2539,6 +2539,21 @@ function ConnectEmailModal(props: {
           </div>
         )}
         <div className="modal-actions">
+          {props.settings.mail_enabled && (
+            <button
+              className="btn ghost"
+              style={{ marginRight: "auto", color: "var(--red)" }}
+              onClick={async () => {
+                try {
+                  await invoke("update_settings", { settings: { ...props.settings, mail_enabled: false } });
+                  props.notify("Email disconnected");
+                  props.onClose();
+                } catch (e) { props.notify(String(e), true); }
+              }}
+            >
+              Disconnect
+            </button>
+          )}
           <button className="btn ghost" onClick={props.onClose}>Cancel</button>
           <button className="btn ghost" disabled={testing || !s.host || !s.user || !s.password} onClick={test}>
             {testing ? "Testing…" : "Test connection"}
@@ -2557,24 +2572,32 @@ function ConnectAIModal(props: {
   onRecheck: () => void;
 }) {
   const [picked, setPicked] = useState<BackendKind | null>(null);
-  const cloud: BackendKind[] = ["claude", "codex", "gemini", "grok"];
+  const groups: { label: string; items: BackendKind[] }[] = [
+    { label: "Private — runs on this Mac", items: ["builtin", "ollama", "lmstudio"] },
+    { label: "Cloud — your own account", items: ["claude", "codex", "gemini", "grok"] },
+  ];
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal" style={{ maxWidth: 480 }}>
         <h2>Connect an AI model</h2>
         <p className="hint" style={{ marginBottom: 12 }}>
           Qivreno's Built-in AI already runs on this Mac for free. Connect a cloud model for
-          stronger results using your own account.
+          stronger results using your own account — pick one for a guided setup.
         </p>
-        <div className="radio-row">
-          {cloud.map((b) => (
-            <button key={b} className={`radio-card ${picked === b ? "selected" : ""}`} onClick={() => setPicked(b)}>
-              <div className="rc-title"><i className={props.avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
-              <div className="rc-sub">{BACKEND_SUB[b]}{props.avail[b] ? " · connected ✓" : ""}</div>
-            </button>
-          ))}
-        </div>
-        {picked && <div style={{ marginTop: 14 }}><SetupGuide backend={picked} avail={props.avail} onRecheck={props.onRecheck} /></div>}
+        {groups.map((g) => (
+          <div key={g.label} className="field">
+            <label>{g.label}</label>
+            <div className="radio-row">
+              {g.items.map((b) => (
+                <button key={b} className={`radio-card ${picked === b ? "selected" : ""}`} onClick={() => setPicked(b)}>
+                  <div className="rc-title"><i className={props.avail[b] ? "dot-up" : "dot-down"} /> {BACKEND_LABEL[b]}</div>
+                  <div className="rc-sub">{BACKEND_SUB[b]}{props.avail[b] ? " · connected ✓" : ""}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {picked && <div style={{ marginTop: 2 }}><SetupGuide backend={picked} avail={props.avail} onRecheck={props.onRecheck} /></div>}
         <div className="modal-actions">
           <button className="btn" onClick={props.onClose}>Done</button>
         </div>
@@ -2624,6 +2647,266 @@ function CancelSubscriptionModal(props: {
   );
 }
 
+/** Subscription management — activation, renewal, cancellation. */
+function SubscriptionModal(props: {
+  settings: Settings;
+  license: LicenseStatus;
+  onStatus: (l: LicenseStatus) => void;
+  onClose: () => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [licKey, setLicKey] = useState(props.settings.license_key);
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelledUntil, setCancelledUntil] = useState(0);
+  const applyLicense = async () => {
+    try {
+      const status = await invoke<LicenseStatus>("apply_license", { key: licKey });
+      props.onStatus(status);
+      props.notify(licKey.trim() ? "License applied" : "License cleared");
+    } catch (e) {
+      props.notify(String(e), true);
+    }
+  };
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h2>Subscription</h2>
+        <div className={`license-status ${props.license.active ? "ok" : "bad"}`} style={{ marginTop: 6 }}>
+          {licenseSummary(props.license)}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <input
+            type="text"
+            style={{ flex: 1 }}
+            placeholder="Activation code (QIVACT-…) or license key (QIV-…)"
+            value={licKey}
+            onChange={(e) => setLicKey(e.target.value)}
+          />
+          <button className="btn sm" onClick={applyLicense}>Apply</button>
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          {props.settings.license_refresh_token
+            ? cancelledUntil > 0
+              ? `Renewal cancelled — access continues until ${new Date(cancelledUntil).toLocaleDateString()}.`
+              : "Activated on this Mac — your license renews automatically in the background."
+            : "Paste the activation code from your purchase email (it activates this Mac and renews automatically), or a license key issued by 272 Solutions."}
+        </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 10 }}>
+          {!props.settings.license_refresh_token && props.license.state !== "licensed" && (
+            <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>
+              Subscribe at qivreno.ai
+            </button>
+          )}
+          {props.settings.license_refresh_token && cancelledUntil === 0 && (
+            <button
+              className="btn link sm"
+              style={{ background: "none", border: "none", color: "var(--text-faint)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+              onClick={() => setShowCancel(true)}
+            >
+              Cancel subscription…
+            </button>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="btn" onClick={props.onClose}>Done</button>
+        </div>
+      </div>
+      {showCancel && (
+        <CancelSubscriptionModal
+          onKeep={() => setShowCancel(false)}
+          onCancelled={(until) => {
+            setShowCancel(false);
+            setCancelledUntil(until || 1);
+            props.notify(
+              until > 0
+                ? `Renewal cancelled — your team keeps working until ${new Date(until).toLocaleDateString()}.`
+                : "Renewal cancelled.",
+            );
+          }}
+          notify={props.notify}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Guided Telegram setup — text tasks to the team from your phone. */
+function ConnectTelegramModal(props: {
+  onClose: () => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [live, setLive] = useState<Settings | null>(null);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    invoke<Snapshot>("get_snapshot").then((sn) => {
+      setLive(sn.settings);
+      setToken(sn.settings.telegram_token);
+    }).catch(() => {});
+  }, []);
+  const refresh = async () => {
+    try { const sn = await invoke<Snapshot>("get_snapshot"); setLive(sn.settings); } catch { /* keep last */ }
+  };
+  const connect = async () => {
+    setBusy(true);
+    try {
+      const sn = await invoke<Snapshot>("get_snapshot");
+      await invoke("update_settings", {
+        settings: { ...sn.settings, telegram_enabled: true, telegram_token: token.trim() },
+      });
+      await refresh();
+      props.notify("Bot saved — now send it the pairing code from Telegram");
+    } catch (e) { props.notify(String(e), true); }
+    setBusy(false);
+  };
+  const disconnect = async () => {
+    try {
+      const sn = await invoke<Snapshot>("get_snapshot");
+      await invoke("update_settings", { settings: { ...sn.settings, telegram_enabled: false } });
+      props.notify("Phone remote turned off");
+      props.onClose();
+    } catch (e) { props.notify(String(e), true); }
+  };
+  const paired = live !== null && live.telegram_chat_id !== 0;
+  const enabled = live?.telegram_enabled ?? false;
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h2>Phone remote (Telegram)</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Text your team from anywhere: messages you send the bot become tasks, and agents reply
+          with results. Free, end-to-end through your own private bot.
+        </p>
+        <ol className="guide-steps" style={{ marginBottom: 12 }}>
+          <li>In Telegram, message <b>@BotFather</b> and send <b>/newbot</b>.</li>
+          <li>Give it a name — BotFather replies with a token.</li>
+          <li>Paste the token below and hit Connect.</li>
+          <li>Send your new bot the pairing code that appears.</li>
+        </ol>
+        <div className="field">
+          <label>Bot token</label>
+          <input
+            type="password"
+            placeholder="123456789:ABC… from @BotFather"
+            value={token}
+            onChange={(e) => setToken(e.target.value.trim())}
+          />
+        </div>
+        {enabled && !paired && live?.telegram_pair_code && (
+          <div className="license-status" style={{ marginBottom: 10 }}>
+            Pairing code — send this to your bot: <b>{live.telegram_pair_code}</b>
+          </div>
+        )}
+        {paired && (
+          <div className="license-status ok" style={{ marginBottom: 10 }}>
+            ✓ Paired — text your bot and tasks route to the team. Prefix with "ask AgentName:" to pick the agent.
+          </div>
+        )}
+        <div className="modal-actions">
+          {enabled && (
+            <button className="btn ghost" style={{ marginRight: "auto", color: "var(--red)" }} onClick={disconnect}>
+              Disconnect
+            </button>
+          )}
+          <button className="btn ghost" onClick={props.onClose}>Close</button>
+          {enabled && !paired && (
+            <button className="btn ghost" onClick={refresh}>Check pairing</button>
+          )}
+          <button className="btn" disabled={busy || !token.trim()} onClick={connect}>
+            {busy ? "Connecting…" : "Connect"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Deck branding — colors + customer template import, applied to every export. */
+function BrandingModal(props: {
+  onClose: () => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [accent, setAccent] = useState("");
+  const [text, setText] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    invoke<Snapshot>("get_snapshot").then((sn) => {
+      setAccent(sn.settings.brand_accent);
+      setText(sn.settings.brand_text);
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, []);
+  const save = async () => {
+    try {
+      const sn = await invoke<Snapshot>("get_snapshot");
+      await invoke("update_settings", { settings: { ...sn.settings, brand_accent: accent, brand_text: text } });
+      props.notify("Deck branding saved");
+      props.onClose();
+    } catch (e) { props.notify(String(e), true); }
+  };
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h2>Deck branding</h2>
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Decks export with Qivreno Blue by default. Import a customer's PowerPoint template to
+          pull their theme colors, or pick them manually — their brand then applies to every
+          presentation and PDF export.
+        </p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+          <label className="color-pick">
+            Accent
+            <input type="color" disabled={!loaded} value={accent || "#2563FF"} onChange={(e) => setAccent(e.target.value)} />
+          </label>
+          <label className="color-pick">
+            Text
+            <input type="color" disabled={!loaded} value={text || "#0B1220"} onChange={(e) => setText(e.target.value)} />
+          </label>
+          <label className="btn ghost sm" style={{ cursor: "pointer" }}>
+            Import customer template…
+            <input
+              type="file"
+              accept=".pptx,.potx"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const buf = new Uint8Array(await file.arrayBuffer());
+                  let bin = "";
+                  for (let i = 0; i < buf.length; i += 0x8000) {
+                    bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+                  }
+                  const res = await invoke<{ accent: string; text: string }>("import_brand_template", {
+                    dataB64: btoa(bin),
+                  });
+                  setAccent(res.accent);
+                  setText(res.text);
+                  props.notify(`Brand imported: accent ${res.accent}`);
+                } catch (err) {
+                  props.notify(String(err), true);
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {(accent || text) && (
+            <button className="btn ghost sm" onClick={() => { setAccent(""); setText(""); }}>
+              Reset to Qivreno
+            </button>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" onClick={save}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Settings hub: one card per feature, each with a status line and a single
+    setup button that opens its guided wizard. Raw fields live under Advanced. */
 function SettingsModal(props: {
   settings: Settings;
   license: LicenseStatus;
@@ -2632,23 +2915,20 @@ function SettingsModal(props: {
   notify: (t: string, e?: boolean) => void;
 }) {
   const [s, setS] = useState<Settings>({ ...props.settings });
-  const [licKey, setLicKey] = useState(props.settings.license_key);
   const [licStatus, setLicStatus] = useState<LicenseStatus>(props.license);
   const [showTerms, setShowTerms] = useState(false);
-  const [showCancel, setShowCancel] = useState(false);
-  const [cancelledUntil, setCancelledUntil] = useState(0);
+  const [showSub, setShowSub] = useState(false);
   const [showConnectEmail, setShowConnectEmail] = useState(false);
   const [showConnectAI, setShowConnectAI] = useState(false);
+  const [showTelegram, setShowTelegram] = useState(false);
+  const [showBrand, setShowBrand] = useState(false);
+  const [showAdv, setShowAdv] = useState(false);
 
-  const applyLicense = async () => {
-    try {
-      const status = await invoke<LicenseStatus>("apply_license", { key: licKey });
-      setLicStatus(status);
-      props.notify(licKey.trim() ? "License applied" : "License cleared");
-    } catch (e) {
-      props.notify(String(e), true);
-    }
-  };
+  // Wizards persist themselves; re-sync our draft when one closes so a later
+  // Save here can't write stale values over what the wizard just saved.
+  const refresh = () =>
+    invoke<Snapshot>("get_snapshot").then((sn) => setS(sn.settings)).catch(() => {});
+
   const save = async () => {
     try {
       await invoke("update_settings", { settings: s });
@@ -2658,236 +2938,156 @@ function SettingsModal(props: {
       props.notify(String(e), true);
     }
   };
+
+  const aiUp = BACKENDS.filter((b) => props.avail[b]);
+  const paired = s.telegram_chat_id !== 0;
+  const cards: {
+    icon: string; title: string; status: string; tone: "up" | "warn" | "";
+    action?: string; onAction?: () => void;
+  }[] = [
+    {
+      icon: "💳", title: "Subscription",
+      status: licenseSummary(licStatus), tone: licStatus.active ? "up" : "warn",
+      action: "Manage", onAction: () => setShowSub(true),
+    },
+    {
+      icon: "🤖", title: "AI models",
+      status: aiUp.length > 0
+        ? `● ${aiUp.map((b) => BACKEND_LABEL[b]).join(", ")}`
+        : "None connected yet — Built-in AI is one click away",
+      tone: aiUp.length > 0 ? "up" : "warn",
+      action: "Set up", onAction: () => setShowConnectAI(true),
+    },
+    {
+      icon: "📧", title: "Email to tasks",
+      status: s.mail_enabled ? `● ${s.mail_user || "Connected"}` : "Off — turn incoming requests into task proposals",
+      tone: s.mail_enabled ? "up" : "",
+      action: s.mail_enabled ? "Manage" : "Connect", onAction: () => setShowConnectEmail(true),
+    },
+    {
+      icon: "📱", title: "Phone remote",
+      status: paired ? "● Paired — text your team via Telegram" : s.telegram_enabled ? "Waiting for pairing…" : "Off — send tasks from your phone",
+      tone: paired ? "up" : s.telegram_enabled ? "warn" : "",
+      action: s.telegram_enabled ? "Manage" : "Set up", onAction: () => setShowTelegram(true),
+    },
+    {
+      icon: "📅", title: "Calendar",
+      status: "● Built in — agents read your Mac Calendar and can book events", tone: "up",
+    },
+    {
+      icon: "🎨", title: "Deck branding",
+      status: s.brand_accent || s.brand_text ? `● Custom — accent ${s.brand_accent || "default"}` : "Qivreno Blue (default)",
+      tone: s.brand_accent || s.brand_text ? "up" : "",
+      action: "Customize", onAction: () => setShowBrand(true),
+    },
+  ];
+
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal">
         <h2>Settings</h2>
-        <div className="field license-field">
-          <label>Subscription</label>
-          <div className={`license-status ${licStatus.active ? "ok" : "bad"}`}>{licenseSummary(licStatus)}</div>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <input
-              type="text"
-              style={{ flex: 1 }}
-              placeholder="Activation code (QIVACT-…) or license key (QIV-…)"
-              value={licKey}
-              onChange={(e) => setLicKey(e.target.value)}
-            />
-            <button className="btn sm" onClick={applyLicense}>Apply</button>
-          </div>
-          <div className="hint">
-            {props.settings.license_refresh_token
-              ? cancelledUntil > 0
-                ? `Renewal cancelled — access continues until ${new Date(cancelledUntil).toLocaleDateString()}.`
-                : "Activated on this Mac — your license renews automatically in the background."
-              : "Paste the activation code from your purchase email (it activates this Mac and renews automatically), or a license key issued by 272 Solutions."}
-          </div>
-          <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 8 }}>
-            {!props.settings.license_refresh_token && licStatus.state !== "licensed" && (
-              <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>
-                Subscribe at qivreno.ai
-              </button>
-            )}
-            {props.settings.license_refresh_token && cancelledUntil === 0 && (
-              <button
-                className="btn link sm"
-                style={{ background: "none", border: "none", color: "var(--dim, #6B7280)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-                onClick={() => setShowCancel(true)}
-              >
-                Cancel subscription…
-              </button>
-            )}
-          </div>
-        </div>
-        {showCancel && (
-          <CancelSubscriptionModal
-            onKeep={() => setShowCancel(false)}
-            onCancelled={(until) => {
-              setShowCancel(false);
-              setCancelledUntil(until || 1);
-              props.notify(
-                until > 0
-                  ? `Renewal cancelled — your team keeps working until ${new Date(until).toLocaleDateString()}.`
-                  : "Renewal cancelled.",
-              );
-            }}
-            notify={props.notify}
-          />
-        )}
-        <div className="settings-section">AI backends</div>
-        <div className="field">
-          <button className="btn ghost sm" onClick={() => setShowConnectAI(true)}>🤖 Connect an AI model</button>
-          <div className="hint">Guided setup for Claude, Codex, Gemini or Grok — or fill the fields below directly.</div>
-        </div>
-        <div className="field">
-          <label>Claude CLI path {props.avail.claude ? "· detected ✓" : "· not found"}</label>
-          <input type="text" value={s.claude_path} placeholder="auto-detected if installed" onChange={(e) => setS({ ...s, claude_path: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Codex CLI path {props.avail.codex ? "· detected ✓" : "· not found"}</label>
-          <input type="text" value={s.codex_path} placeholder="npm i -g @openai/codex" onChange={(e) => setS({ ...s, codex_path: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Gemini (Google) API key {props.avail.gemini ? "· configured ✓" : ""}</label>
-          <input type="password" value={s.gemini_api_key} placeholder="from aistudio.google.com/apikey (stored only on this Mac)" onChange={(e) => setS({ ...s, gemini_api_key: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Grok (xAI) API key {props.avail.grok ? "· configured ✓" : ""}</label>
-          <input type="password" value={s.grok_api_key} placeholder="xai-… from console.x.ai (stored only on this Mac)" onChange={(e) => setS({ ...s, grok_api_key: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>Ollama URL {props.avail.ollama ? "· connected ✓" : "· not running"}</label>
-          <input type="text" value={s.ollama_url} onChange={(e) => setS({ ...s, ollama_url: e.target.value })} />
-        </div>
-        <div className="field">
-          <label>LM Studio / OpenAI-compatible server URL {props.avail.lmstudio ? "· connected ✓" : "· not running"}</label>
-          <input type="text" value={s.lmstudio_url} placeholder="http://localhost:1234/v1" onChange={(e) => setS({ ...s, lmstudio_url: e.target.value })} />
-          <div className="hint">Works with LM Studio, LocalAI, llama.cpp server, or any other OpenAI-compatible endpoint.</div>
-        </div>
-        <div className="field">
-          <label>Routing model (picks the best-fit agent for broadcast tasks)</label>
-          {props.avail.ollama_models.length > 0 ? (
-            <select value={s.router_model} onChange={(e) => setS({ ...s, router_model: e.target.value })}>
-              <option value="">Auto (first available)</option>
-              {props.avail.ollama_models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input type="text" value={s.router_model} onChange={(e) => setS({ ...s, router_model: e.target.value })} />
-          )}
-        </div>
-        <div className="settings-section">Presentation branding</div>
-        <div className="field">
-          <label>Deck branding (PowerPoint / PDF presentation exports)</label>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <label className="color-pick">
-              Accent
-              <input
-                type="color"
-                value={s.brand_accent || "#2563FF"}
-                onChange={(e) => setS({ ...s, brand_accent: e.target.value })}
-              />
-            </label>
-            <label className="color-pick">
-              Text
-              <input
-                type="color"
-                value={s.brand_text || "#0B1220"}
-                onChange={(e) => setS({ ...s, brand_text: e.target.value })}
-              />
-            </label>
-            <label className="btn ghost sm" style={{ cursor: "pointer" }}>
-              Import customer template…
-              <input
-                type="file"
-                accept=".pptx,.potx"
-                style={{ display: "none" }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const buf = new Uint8Array(await file.arrayBuffer());
-                    let bin = "";
-                    for (let i = 0; i < buf.length; i += 0x8000) {
-                      bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-                    }
-                    const res = await invoke<{ accent: string; text: string }>("import_brand_template", {
-                      dataB64: btoa(bin),
-                    });
-                    setS({ ...s, brand_accent: res.accent, brand_text: res.text });
-                    props.notify(`Brand imported: accent ${res.accent}`);
-                  } catch (err) {
-                    props.notify(String(err), true);
-                  }
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            {(s.brand_accent || s.brand_text) && (
-              <button className="btn ghost sm" onClick={() => setS({ ...s, brand_accent: "", brand_text: "" })}>
-                Reset to Qivreno
-              </button>
-            )}
-          </div>
-          <div className="hint">
-            Decks export with Qivreno Blue by default. Import a customer's PowerPoint template
-            (.pptx/.potx) to pull their theme colors, or pick them manually — their brand then
-            applies to every presentation export.
-          </div>
-        </div>
-        <div className="settings-section">Team behavior</div>
-        <div className="field">
-          <label>Agent-to-agent conversation limit (hops)</label>
-          <input
-            type="number" min={1} max={20} value={s.max_hops}
-            onChange={(e) => setS({ ...s, max_hops: Math.max(1, Number(e.target.value) || 6) })}
-          />
-          <div className="hint">Stops two agents from talking to each other forever. After this many back-and-forths, messages are delivered but no longer auto-answered.</div>
-        </div>
-        <div className="settings-section">Integrations</div>
-        <div className="field">
-          <label>Email → task proposals</label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn ghost sm" onClick={() => setShowConnectEmail(true)}>
-              {s.mail_enabled ? "Reconfigure email…" : "📧 Connect email"}
-            </button>
-            {s.mail_enabled && (
-              <>
-                <span className="guide-status up">● {s.mail_user || "connected"}</span>
-                <button className="btn ghost sm" onClick={() => setS({ ...s, mail_enabled: false })}>Disconnect</button>
-              </>
-            )}
-          </div>
-          <div className="hint">
-            Reads your inbox every 5 minutes (never marks mail read) and turns real requests into
-            proposals in the Requires Input column — nothing runs until you approve it.
-          </div>
-        </div>
-        <div className="field">
-          <label>
-            <input
-              type="checkbox"
-              checked={s.telegram_enabled}
-              onChange={(e) => setS({ ...s, telegram_enabled: e.target.checked })}
-              style={{ marginRight: 8 }}
-            />
-            Telegram remote — text tasks to your team from your phone
-          </label>
-          {s.telegram_enabled && (
-            <>
-              <input type="password" style={{ marginTop: 8, width: "100%" }} placeholder="Bot token from @BotFather" value={s.telegram_token} onChange={(e) => setS({ ...s, telegram_token: e.target.value.trim() })} />
-              <div className="hint">
-                {props.settings.telegram_chat_id !== 0
-                  ? "Paired ✓ — message your bot from Telegram and tasks route to the team. Prefix with 'ask AgentName:' to pick the agent."
-                  : props.settings.telegram_pair_code
-                  ? `Not paired yet. In Telegram, open your bot and send it this code: ${props.settings.telegram_pair_code}`
-                  : "Create a bot in Telegram: message @BotFather → /newbot → paste the token here and Save. A pairing code will appear here."}
+        <div className="settings-cards">
+          {cards.map((c) => (
+            <div key={c.title} className="setting-card">
+              <div className="sc-icon">{c.icon}</div>
+              <div className="sc-body">
+                <div className="sc-title">{c.title}</div>
+                <div className={`sc-status ${c.tone}`}>{c.status}</div>
               </div>
-            </>
-          )}
+              {c.action && (
+                <button className="btn ghost sm" onClick={c.onAction}>{c.action}</button>
+              )}
+            </div>
+          ))}
         </div>
-        <div className="hint" style={{ marginBottom: 4 }}>
+
+        <button className="adv-toggle" onClick={() => setShowAdv(!showAdv)}>
+          {showAdv ? "▾" : "▸"} Advanced
+        </button>
+        {showAdv && (
+          <div style={{ marginTop: 10 }}>
+            <div className="field">
+              <label>Claude CLI path {props.avail.claude ? "· detected ✓" : "· not found"}</label>
+              <input type="text" value={s.claude_path} placeholder="auto-detected if installed" onChange={(e) => setS({ ...s, claude_path: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Codex CLI path {props.avail.codex ? "· detected ✓" : "· not found"}</label>
+              <input type="text" value={s.codex_path} placeholder="npm i -g @openai/codex" onChange={(e) => setS({ ...s, codex_path: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Ollama URL {props.avail.ollama ? "· connected ✓" : "· not running"}</label>
+              <input type="text" value={s.ollama_url} onChange={(e) => setS({ ...s, ollama_url: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>LM Studio / OpenAI-compatible server URL {props.avail.lmstudio ? "· connected ✓" : "· not running"}</label>
+              <input type="text" value={s.lmstudio_url} placeholder="http://localhost:1234/v1" onChange={(e) => setS({ ...s, lmstudio_url: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Routing model (picks the best-fit agent for broadcast tasks)</label>
+              {props.avail.ollama_models.length > 0 ? (
+                <select value={s.router_model} onChange={(e) => setS({ ...s, router_model: e.target.value })}>
+                  <option value="">Auto (first available)</option>
+                  {props.avail.ollama_models.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              ) : (
+                <input type="text" value={s.router_model} onChange={(e) => setS({ ...s, router_model: e.target.value })} />
+              )}
+            </div>
+            <div className="field">
+              <label>Agent-to-agent conversation limit (hops)</label>
+              <input
+                type="number" min={1} max={20} value={s.max_hops}
+                onChange={(e) => setS({ ...s, max_hops: Math.max(1, Number(e.target.value) || 6) })}
+              />
+              <div className="hint">Stops two agents from talking to each other forever. After this many back-and-forths, messages are delivered but no longer auto-answered.</div>
+            </div>
+          </div>
+        )}
+
+        <div className="hint" style={{ margin: "14px 0 4px" }}>
           <button className="linkish" onClick={() => setShowTerms(true)}>View Terms &amp; Conditions</button>
           {props.settings.terms_accepted_at > 0 &&
             ` — accepted ${new Date(props.settings.terms_accepted_at).toLocaleDateString()} (v${props.settings.terms_accepted_version})`}
         </div>
         <div className="modal-actions">
-          <button className="btn ghost" onClick={props.onClose}>Cancel</button>
-          <button className="btn" onClick={save}>Save</button>
+          <button className="btn ghost" onClick={props.onClose}>Close</button>
+          {showAdv && <button className="btn" onClick={save}>Save</button>}
         </div>
       </div>
       {showTerms && <TermsModal viewOnly onClose={() => setShowTerms(false)} notify={props.notify} />}
+      {showSub && (
+        <SubscriptionModal
+          settings={s}
+          license={licStatus}
+          onStatus={setLicStatus}
+          notify={props.notify}
+          onClose={() => { setShowSub(false); refresh(); }}
+        />
+      )}
       {showConnectEmail && (
         <ConnectEmailModal
           settings={s}
           notify={props.notify}
-          onClose={() => { setShowConnectEmail(false); invoke<Snapshot>("get_snapshot").then((sn) => setS(sn.settings)).catch(() => {}); }}
+          onClose={() => { setShowConnectEmail(false); refresh(); }}
         />
       )}
       {showConnectAI && (
         <ConnectAIModal
           avail={props.avail}
-          onClose={() => setShowConnectAI(false)}
+          onClose={() => { setShowConnectAI(false); refresh(); }}
           onRecheck={() => invoke("check_availability").catch(() => {})}
+        />
+      )}
+      {showTelegram && (
+        <ConnectTelegramModal
+          notify={props.notify}
+          onClose={() => { setShowTelegram(false); refresh(); }}
+        />
+      )}
+      {showBrand && (
+        <BrandingModal
+          notify={props.notify}
+          onClose={() => { setShowBrand(false); refresh(); }}
         />
       )}
     </div>

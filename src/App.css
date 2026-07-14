@@ -11,10 +11,10 @@
   --green: #5fd4a2;
   --red: #e0637c;
   --amber: #f2a65a;
-  /* Sidebar keeps the brand navy in both themes */
   --side-bg: #14171d;
   --side-border: #262c38;
   --side-text: #c8cfda;
+  --side-text-strong: #ffffff;
   --side-text-dim: #8b94a3;
   --side-hover: #1f242e;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
@@ -36,7 +36,15 @@
   --green: #1d9e6d;
   --red: #d4485f;
   --amber: #c47b25;
+  --side-bg: #ffffff;
+  --side-border: #d8dee8;
+  --side-text: #2a3442;
+  --side-text-strong: #17202b;
+  --side-text-dim: #556070;
+  --side-hover: #eef1f7;
 }
+/* The lockup asset is pure white; flip it dark on the light sidebar. */
+:root[data-theme="light"] .brand-lockup { filter: invert(0.85); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
@@ -79,7 +87,7 @@ input, textarea, select { font: inherit; color: var(--text); }
   color: var(--side-text-dim); font-weight: 500; width: 100%; text-align: left;
 }
 .nav-item:hover { background: var(--side-hover); color: var(--side-text); }
-.nav-item.active { background: var(--side-hover); color: #fff; }
+.nav-item.active { background: var(--side-hover); color: var(--side-text-strong); }
 .nav-item .icon { width: 16px; text-align: center; opacity: 0.9; }
 
 .section-label {
@@ -383,6 +391,26 @@ input, textarea, select { font: inherit; color: var(--text); }
   color: var(--text-faint); margin: 22px 0 10px; padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
+
+/* ---------- Settings hub: one card per feature ---------- */
+.settings-cards { display: flex; flex-direction: column; gap: 9px; margin: 6px 0 4px; }
+.setting-card {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--border); border-radius: 11px;
+  background: var(--bg); padding: 12px 14px;
+}
+.sc-icon { font-size: 19px; width: 28px; text-align: center; flex-shrink: 0; }
+.sc-body { flex: 1; min-width: 0; }
+.sc-title { font-weight: 650; font-size: 13.5px; }
+.sc-status { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+.sc-status.up { color: var(--green); }
+.sc-status.warn { color: var(--amber); }
+.setting-card .btn { flex-shrink: 0; }
+.adv-toggle {
+  display: flex; align-items: center; gap: 6px; margin-top: 14px;
+  color: var(--text-faint); font-size: 12.5px; font-weight: 550;
+}
+.adv-toggle:hover { color: var(--text-dim); }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
 .field input[type="text"], .field textarea, .field select, .field input[type="number"] {
