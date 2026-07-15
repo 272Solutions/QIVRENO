@@ -129,8 +129,8 @@ pub fn export_shared_file(
     let (brand_accent, brand_text) = {
         let s = state.settings.lock().unwrap();
         (
-            if s.brand_accent.is_empty() { "2563FF".to_string() } else { s.brand_accent.trim_start_matches('#').to_uppercase() },
-            if s.brand_text.is_empty() { "0B1220".to_string() } else { s.brand_text.trim_start_matches('#').to_uppercase() },
+            if s.brand_accent.is_empty() { "005DFF".to_string() } else { s.brand_accent.trim_start_matches('#').to_uppercase() },
+            if s.brand_text.is_empty() { "111827".to_string() } else { s.brand_text.trim_start_matches('#').to_uppercase() },
         )
     };
 

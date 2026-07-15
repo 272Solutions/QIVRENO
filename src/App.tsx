@@ -2856,11 +2856,11 @@ function BrandingModal(props: {
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
           <label className="color-pick">
             Accent
-            <input type="color" disabled={!loaded} value={accent || "#2563FF"} onChange={(e) => setAccent(e.target.value)} />
+            <input type="color" disabled={!loaded} value={accent || "#005DFF"} onChange={(e) => setAccent(e.target.value)} />
           </label>
           <label className="color-pick">
             Text
-            <input type="color" disabled={!loaded} value={text || "#0B1220"} onChange={(e) => setText(e.target.value)} />
+            <input type="color" disabled={!loaded} value={text || "#111827"} onChange={(e) => setText(e.target.value)} />
           </label>
           <label className="btn ghost sm" style={{ cursor: "pointer" }}>
             Import customer template…
