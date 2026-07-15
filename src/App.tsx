@@ -407,6 +407,7 @@ export default function App() {
   const [editingAgent, setEditingAgent] = useState<Agent | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [getStarted, setGetStarted] = useState<(typeof GET_STARTED)[number] | null>(null);
   const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light" | "system">(
@@ -594,6 +595,14 @@ export default function App() {
             ✨ Quick Start Team
           </button>
         )}
+        <div className="section-label"><span>Get Started</span></div>
+        <div className="get-started">
+          {GET_STARTED.map((g) => (
+            <button key={g.label} className="gs-item" title={g.desc} onClick={() => setGetStarted(g)}>
+              <span className="gs-icon">{g.icon}</span> {g.label}
+            </button>
+          ))}
+        </div>
         <div className="sidebar-footer">
           <div className="backend-dots">
             {BACKENDS.map((b) => (
@@ -679,6 +688,16 @@ export default function App() {
           </div>
         </div>
       )}
+      {getStarted && (
+        <GetStartedModal
+          tpl={getStarted}
+          hasAgents={snap.agents.length > 0}
+          onQuickStart={() => { setGetStarted(null); setShowTemplates(true); }}
+          onDispatched={() => { setGetStarted(null); setView({ kind: "board" }); }}
+          onClose={() => setGetStarted(null)}
+          notify={notify}
+        />
+      )}
       {showSettings && (
         <SettingsModal
           settings={snap.settings}
@@ -733,6 +752,122 @@ export default function App() {
 }
 
 /* ------------------------------------------------------------------ */
+
+/* Get Started templates: one-click briefs that produce a defined deliverable
+   in Shared/. Shown in the sidebar below Quick Start Team; the optional
+   context field is folded into the dispatched prompt. */
+const GET_STARTED: { icon: string; label: string; desc: string; hint: string; prompt: (ctx: string) => string }[] = [
+  {
+    icon: "📣",
+    label: "Marketing Plan",
+    desc: "A 30-day plan: audience, channel mix, week-by-week calendar, three sample posts, and success metrics.",
+    hint: "What are you marketing? e.g. a bookkeeping service for restaurants",
+    prompt: (ctx) =>
+      `Create a 30-day marketing plan${ctx ? ` for: ${ctx}.` : ". Use our Business Profile in the Library; ask me anything essential that's missing."} ` +
+      "Include the target audience, channel mix, a week-by-week content calendar, three sample posts in our voice, and how we'll measure success. " +
+      "Deliver as Shared/Marketing Plan.md.",
+  },
+  {
+    icon: "📽",
+    label: "Pitch Deck",
+    desc: "An investor-style deck: problem, solution, market, business model, traction, team, and the ask.",
+    hint: "What's the company or product, and who's the audience?",
+    prompt: (ctx) =>
+      `Build a pitch deck${ctx ? ` for: ${ctx}.` : ". Use our Business Profile in the Library; ask me anything essential that's missing."} ` +
+      "Roughly 10 slides: problem, solution, product, market size, business model, traction or go-to-market plan, team, and a clear ask. " +
+      "Deliver as Shared/Pitch Deck.slides.json so it exports to PowerPoint.",
+  },
+  {
+    icon: "✉️",
+    label: "Marketing Emails",
+    desc: "Turns your product info into a 3-email sequence: awareness, value, and call-to-action.",
+    hint: "Paste product info here, or name a file you've dropped in Shared/",
+    prompt: (ctx) =>
+      "Review this product information and turn it into a 3-email marketing sequence — awareness, value, call-to-action — each with a subject line, preview text, and body copy. " +
+      `Product info: ${ctx || "[none provided — read the newest product document in Shared/ and confirm with me before writing]"}. ` +
+      "Deliver as Shared/Marketing Emails.md.",
+  },
+  {
+    icon: "🤝",
+    label: "Recruit a Sales Manager",
+    desc: "A hiring kit: job description, screening questions, interview plan with scorecard, and outreach message.",
+    hint: "Anything specific? e.g. remote, $90k base, industrial clients",
+    prompt: (ctx) =>
+      `Help me recruit a new sales manager${ctx ? ` — requirements: ${ctx}.` : "."} ` +
+      "Produce a hiring kit: job description, where to post it, five screening questions, a structured interview plan with a scorecard, and a first-touch candidate outreach message. " +
+      "Deliver as Shared/Sales Manager Hiring Kit.md.",
+  },
+  {
+    icon: "📊",
+    label: "P&L Dashboard",
+    desc: "Visualizes last quarter's profit and loss: revenue, costs, net, and the biggest line items.",
+    hint: "Paste the numbers, or name a P&L file you've dropped in Shared/",
+    prompt: (ctx) =>
+      `Help me visualize my profit and loss over the last quarter. ${ctx ? `The numbers: ${ctx}.` : "[No numbers provided — read the newest spreadsheet in Shared/, or ask me for the figures.]"} ` +
+      "Build Shared/Quarterly P&L Dashboard.dash.json with stat widgets for revenue, total costs and net profit, a monthly revenue-vs-costs bar chart, and a table of the largest line items.",
+  },
+];
+
+/** One Get Started template → a dispatched task with the user's context folded in. */
+function GetStartedModal(props: {
+  tpl: (typeof GET_STARTED)[number];
+  hasAgents: boolean;
+  onQuickStart: () => void;
+  onDispatched: () => void;
+  onClose: () => void;
+  notify: (t: string, e?: boolean) => void;
+}) {
+  const [ctx, setCtx] = useState("");
+  const [busy, setBusy] = useState(false);
+  const dispatch = async () => {
+    setBusy(true);
+    try {
+      await invoke("create_task", { title: "", prompt: props.tpl.prompt(ctx.trim()), agentKey: null, draft: false });
+      props.notify(`${props.tpl.label} dispatched — the deliverable will land in Files`);
+      props.onDispatched();
+    } catch (e) {
+      props.notify(String(e), true);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <h2>{props.tpl.icon} {props.tpl.label}</h2>
+        <p className="hint" style={{ margin: "8px 0 14px" }}>{props.tpl.desc}</p>
+        <div className="field">
+          <label>Your specifics (optional — the team asks if it needs more)</label>
+          <textarea
+            autoFocus
+            rows={4}
+            style={{ width: "100%", resize: "vertical" }}
+            placeholder={props.tpl.hint}
+            value={ctx}
+            onChange={(e) => setCtx(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && props.hasAgents && !busy) dispatch();
+            }}
+          />
+        </div>
+        {!props.hasAgents && (
+          <div className="hint" style={{ marginBottom: 10 }}>
+            You need a team first — Quick Start sets one up in seconds.
+          </div>
+        )}
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          {!props.hasAgents ? (
+            <button className="btn" onClick={props.onQuickStart}>✨ Quick Start Team</button>
+          ) : (
+            <button className="btn" disabled={busy} onClick={dispatch}>
+              {busy ? "Dispatching…" : "Dispatch to team ⌘↵"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const OUTCOMES: { label: string; prompt: string }[] = [
   { label: "📑 Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a polished document in Shared/." },
@@ -1368,15 +1503,27 @@ const KIND_META: Record<string, { icon: string; label: string; exports: { label:
   other: { icon: "🗎", label: "File", exports: [] },
 };
 
-/* New-file templates: the user names the file first, and the name flows into
-   the template so the document/deck/dashboard title matches from the start. */
-const NEW_FILE_TEMPLATES: { kind: string; ext: string; hint: string; make: (title: string) => string }[] = [
-  { kind: "document", ext: ".md", hint: "e.g. Vendor Cost Review", make: (t) => `# ${t}\n\nStart writing…\n` },
-  { kind: "spreadsheet", ext: ".csv", hint: "e.g. Q3 Budget", make: () => "Item,Amount,Notes\nExample,100,\n" },
+/* New-file templates: the user names the file and describes what they want;
+   the team builds the content into the file. "Start blank" uses make() with
+   the name folded in so titles match from the start. */
+const NEW_FILE_TEMPLATES: { kind: string; ext: string; hint: string; briefHint: string; make: (title: string) => string }[] = [
+  {
+    kind: "document", ext: ".md",
+    hint: "e.g. Vendor Cost Review",
+    briefHint: "e.g. Compare our top 5 vendors on cost and reliability, recommend which to renegotiate",
+    make: (t) => `# ${t}\n\nStart writing…\n`,
+  },
+  {
+    kind: "spreadsheet", ext: ".csv",
+    hint: "e.g. Q3 Budget",
+    briefHint: "e.g. A quarterly budget with categories for payroll, tools, marketing and travel",
+    make: () => "Item,Amount,Notes\nExample,100,\n",
+  },
   {
     kind: "presentation",
     ext: ".slides.json",
     hint: "e.g. Client Kickoff Deck",
+    briefHint: "e.g. A kickoff deck for the Acme project: goals, timeline, team, next steps",
     make: (t) => JSON.stringify(
       { title: t, slides: [{ title: "First slide", bullets: ["Point one", "Point two"], notes: "" }] },
       null, 2),
@@ -1385,6 +1532,7 @@ const NEW_FILE_TEMPLATES: { kind: string; ext: string; hint: string; make: (titl
     kind: "dashboard",
     ext: ".dash.json",
     hint: "e.g. Q3 Sales Dashboard",
+    briefHint: "e.g. Show monthly revenue vs target, top customers, and pipeline by stage",
     make: (t) => JSON.stringify(
       {
         title: t,
@@ -1519,12 +1667,30 @@ function CsvView(props: { text: string }) {
   );
 }
 
+/** JSON.parse that survives the truncated output local models sometimes
+    produce: on failure, balance any unclosed strings/brackets and retry. */
+function parseLoose(text: string): any | null {
+  try { return JSON.parse(text); } catch { /* try repair */ }
+  let inStr = false, esc = false;
+  const stack: string[] = [];
+  for (const ch of text) {
+    if (esc) { esc = false; continue; }
+    if (ch === "\\") { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+  const repaired = text.trimEnd().replace(/,\s*$/, "") + (inStr ? '"' : "") + stack.reverse().join("");
+  try { return JSON.parse(repaired); } catch { return null; }
+}
+
 function SlidesView(props: { text: string }) {
   const [idx, setIdx] = useState(0);
-  let deck: { title?: string; slides?: { title?: string; bullets?: string[]; notes?: string }[] };
-  try {
-    deck = JSON.parse(props.text);
-  } catch {
+  const deck: { title?: string; slides?: { title?: string; bullets?: string[]; notes?: string }[] } | null =
+    parseLoose(props.text);
+  if (!deck) {
     return <div className="empty">This presentation isn't valid JSON yet — switch to Edit to fix it.</div>;
   }
   const slides = deck.slides ?? [];
@@ -1642,10 +1808,8 @@ function LineChart(props: { data: { x: string; y: number }[] }) {
 }
 
 function DashView(props: { text: string }) {
-  let dash: { title?: string; widgets?: Record<string, unknown>[] };
-  try {
-    dash = JSON.parse(props.text);
-  } catch {
+  const dash: { title?: string; widgets?: Record<string, unknown>[] } | null = parseLoose(props.text);
+  if (!dash) {
     return <div className="empty">This dashboard isn't valid JSON yet — switch to Edit to fix it.</div>;
   }
   const widgets = (dash.widgets ?? []) as {
@@ -1702,7 +1866,7 @@ function FilesView(props: {
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
-  const [naming, setNaming] = useState<{ tpl: (typeof NEW_FILE_TEMPLATES)[number]; title: string } | null>(null);
+  const [naming, setNaming] = useState<{ tpl: (typeof NEW_FILE_TEMPLATES)[number]; title: string; brief: string } | null>(null);
 
   const refresh = useCallback(() => {
     invoke<SharedFile[]>("list_shared_files").then(setFiles).catch(() => {});
@@ -1744,6 +1908,26 @@ function FilesView(props: {
       setDirty(false);
       refresh();
       notify("Saved");
+    } catch (e) {
+      notify(String(e), true);
+    }
+  };
+
+  /** Dispatch the content brief to the team; the file lands here when done. */
+  const buildFile = async (tpl: (typeof NEW_FILE_TEMPLATES)[number], title: string, brief: string) => {
+    const base = title.trim().replace(/[/\\:]/g, "-").replace(/^\.+/, "") || "Untitled";
+    const name = base + tpl.ext;
+    const kindLabel = KIND_META[tpl.kind].label.toLowerCase();
+    try {
+      await invoke("create_task", {
+        title: "",
+        prompt:
+          `Create the ${kindLabel} "Shared/${name}" — keep exactly this file name and the format its extension implies. ` +
+          `Content brief: ${brief.trim()}`,
+        agentKey: null,
+        draft: false,
+      });
+      notify(`Sent to the team — ${name} will appear here when ready`);
     } catch (e) {
       notify(String(e), true);
     }
@@ -1815,7 +1999,7 @@ function FilesView(props: {
           <div className="section-label"><span>New</span></div>
           <div className="file-new-row">
             {NEW_FILE_TEMPLATES.map((t) => (
-              <button key={t.kind} className="file-new" title={`New ${KIND_META[t.kind].label}`} onClick={() => setNaming({ tpl: t, title: "" })}>
+              <button key={t.kind} className="file-new" title={`New ${KIND_META[t.kind].label}`} onClick={() => setNaming({ tpl: t, title: "", brief: "" })}>
                 {KIND_META[t.kind].icon}<span>{KIND_META[t.kind].label}</span>
               </button>
             ))}
@@ -1916,7 +2100,7 @@ function FilesView(props: {
       </div>
       {naming && (
         <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setNaming(null); }}>
-          <div className="modal" style={{ maxWidth: 400 }}>
+          <div className="modal" style={{ maxWidth: 440 }}>
             <h2>New {KIND_META[naming.tpl.kind].label.toLowerCase()}</h2>
             <div className="field" style={{ marginTop: 10 }}>
               <label>Name</label>
@@ -1926,8 +2110,22 @@ function FilesView(props: {
                 placeholder={naming.tpl.hint}
                 value={naming.title}
                 onChange={(e) => setNaming({ ...naming, title: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Escape") setNaming(null); }}
+              />
+            </div>
+            <div className="field">
+              <label>What should it contain? The team builds it for you.</label>
+              <textarea
+                rows={4}
+                style={{ width: "100%", resize: "vertical" }}
+                placeholder={naming.tpl.briefHint}
+                value={naming.brief}
+                onChange={(e) => setNaming({ ...naming, brief: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && naming.title.trim()) { createFile(naming.tpl, naming.title); setNaming(null); }
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && naming.title.trim() && naming.brief.trim()) {
+                    buildFile(naming.tpl, naming.title, naming.brief);
+                    setNaming(null);
+                  }
                   if (e.key === "Escape") setNaming(null);
                 }}
               />
@@ -1935,11 +2133,19 @@ function FilesView(props: {
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => setNaming(null)}>Cancel</button>
               <button
-                className="btn"
+                className="btn ghost"
                 disabled={!naming.title.trim()}
+                title="Create an empty file and write it yourself"
                 onClick={() => { createFile(naming.tpl, naming.title); setNaming(null); }}
               >
-                Create
+                Start blank
+              </button>
+              <button
+                className="btn"
+                disabled={!naming.title.trim() || !naming.brief.trim()}
+                onClick={() => { buildFile(naming.tpl, naming.title, naming.brief); setNaming(null); }}
+              >
+                Ask the team ⌘↵
               </button>
             </div>
           </div>

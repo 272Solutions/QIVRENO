@@ -127,6 +127,15 @@ input, textarea, select { font: inherit; color: var(--text); }
 .add-agent:hover:not(:disabled) { color: var(--text); border-color: var(--text-faint); }
 .add-agent:disabled { opacity: 0.4; cursor: default; }
 
+.get-started { display: flex; flex-direction: column; gap: 1px; }
+.gs-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-radius: 8px; width: 100%; text-align: left;
+  color: var(--side-text-dim); font-size: 12.5px; font-weight: 500;
+}
+.gs-item:hover { background: var(--side-hover); color: var(--side-text); }
+.gs-icon { width: 16px; text-align: center; }
+
 .sidebar-footer {
   border-top: 1px solid var(--border); margin-top: 10px; padding-top: 9px;
   display: flex; align-items: center; justify-content: space-between; padding-left: 6px;
