@@ -47,11 +47,31 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci || npm install
 
-      - name: Prepare Apple API key (macOS, signed releases only)
+      # Tauri treats a PRESENT-but-empty APPLE_CERTIFICATE as "sign this build"
+      # and dies at `security import`, so the signing vars must only exist in
+      # the build step's environment when the secrets are actually configured.
+      # We stage them through GITHUB_ENV (values stay masked in logs).
+      - name: Enable Apple signing (macOS, only when secrets are set)
         if: matrix.platform == 'macos-latest'
         env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "Apple signing secrets not configured — building unsigned."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE<<__EOF__";          echo "$APPLE_CERTIFICATE";          echo "__EOF__"
+            echo "APPLE_CERTIFICATE_PASSWORD<<__EOF__"; echo "$APPLE_CERTIFICATE_PASSWORD"; echo "__EOF__"
+            echo "APPLE_SIGNING_IDENTITY<<__EOF__";     echo "$APPLE_SIGNING_IDENTITY";     echo "__EOF__"
+            echo "APPLE_API_ISSUER<<__EOF__";           echo "$APPLE_API_ISSUER";           echo "__EOF__"
+            echo "APPLE_API_KEY<<__EOF__";              echo "$APPLE_API_KEY";              echo "__EOF__"
+          } >> "$GITHUB_ENV"
           if [ -n "$APPLE_API_KEY_P8" ]; then
             mkdir -p ~/.appleconnect
             echo "$APPLE_API_KEY_P8" | base64 --decode > ~/.appleconnect/AuthKey.p8
@@ -62,13 +82,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS Developer ID signing + notarization (no-ops when secrets are
-          # unset — the build stays unsigned, exactly as today).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
           args: ${{ matrix.args }}
           # On tag pushes, attach installers to a draft GitHub release:
