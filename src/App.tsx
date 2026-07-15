@@ -1368,22 +1368,26 @@ const KIND_META: Record<string, { icon: string; label: string; exports: { label:
   other: { icon: "🗎", label: "File", exports: [] },
 };
 
-const NEW_FILE_TEMPLATES: { kind: string; name: string; content: string }[] = [
-  { kind: "document", name: "Untitled.md", content: "# Untitled\n\nStart writing…\n" },
-  { kind: "spreadsheet", name: "Untitled.csv", content: "Item,Amount,Notes\nExample,100,\n" },
+/* New-file templates: the user names the file first, and the name flows into
+   the template so the document/deck/dashboard title matches from the start. */
+const NEW_FILE_TEMPLATES: { kind: string; ext: string; hint: string; make: (title: string) => string }[] = [
+  { kind: "document", ext: ".md", hint: "e.g. Vendor Cost Review", make: (t) => `# ${t}\n\nStart writing…\n` },
+  { kind: "spreadsheet", ext: ".csv", hint: "e.g. Q3 Budget", make: () => "Item,Amount,Notes\nExample,100,\n" },
   {
     kind: "presentation",
-    name: "Untitled.slides.json",
-    content: JSON.stringify(
-      { title: "Untitled deck", slides: [{ title: "First slide", bullets: ["Point one", "Point two"], notes: "" }] },
+    ext: ".slides.json",
+    hint: "e.g. Client Kickoff Deck",
+    make: (t) => JSON.stringify(
+      { title: t, slides: [{ title: "First slide", bullets: ["Point one", "Point two"], notes: "" }] },
       null, 2),
   },
   {
     kind: "dashboard",
-    name: "Untitled.dash.json",
-    content: JSON.stringify(
+    ext: ".dash.json",
+    hint: "e.g. Q3 Sales Dashboard",
+    make: (t) => JSON.stringify(
       {
-        title: "Untitled dashboard",
+        title: t,
         widgets: [
           { type: "stat", label: "Revenue", value: "$12,400", sub: "this month" },
           { type: "bar", label: "Sales by month", data: [{ x: "Jan", y: 8 }, { x: "Feb", y: 12 }, { x: "Mar", y: 10 }] },
@@ -1698,6 +1702,7 @@ function FilesView(props: {
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
+  const [naming, setNaming] = useState<{ tpl: (typeof NEW_FILE_TEMPLATES)[number]; title: string } | null>(null);
 
   const refresh = useCallback(() => {
     invoke<SharedFile[]>("list_shared_files").then(setFiles).catch(() => {});
@@ -1744,20 +1749,21 @@ function FilesView(props: {
     }
   };
 
-  const createFile = async (tpl: (typeof NEW_FILE_TEMPLATES)[number]) => {
-    let name = tpl.name;
+  const createFile = async (tpl: (typeof NEW_FILE_TEMPLATES)[number], title: string) => {
+    const base = title.trim().replace(/[/\\:]/g, "-").replace(/^\.+/, "") || "Untitled";
+    let name = base + tpl.ext;
     let n = 2;
     while (files.some((f) => f.name === name)) {
-      const dot = tpl.name.indexOf(".");
-      name = `${tpl.name.slice(0, dot)} ${n}${tpl.name.slice(dot)}`;
+      name = `${base} ${n}${tpl.ext}`;
       n++;
     }
+    const content = tpl.make(base);
     try {
-      await invoke("write_shared_file", { name, content: tpl.content });
+      await invoke("write_shared_file", { name, content });
       refresh();
       setSelName(name);
-      setContent(tpl.content);
-      setEditing(false);
+      setContent(content);
+      setEditing(true);
       setDirty(false);
     } catch (e) {
       notify(String(e), true);
@@ -1809,7 +1815,7 @@ function FilesView(props: {
           <div className="section-label"><span>New</span></div>
           <div className="file-new-row">
             {NEW_FILE_TEMPLATES.map((t) => (
-              <button key={t.kind} className="file-new" title={`New ${KIND_META[t.kind].label}`} onClick={() => createFile(t)}>
+              <button key={t.kind} className="file-new" title={`New ${KIND_META[t.kind].label}`} onClick={() => setNaming({ tpl: t, title: "" })}>
                 {KIND_META[t.kind].icon}<span>{KIND_META[t.kind].label}</span>
               </button>
             ))}
@@ -1908,6 +1914,37 @@ function FilesView(props: {
           )}
         </div>
       </div>
+      {naming && (
+        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setNaming(null); }}>
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <h2>New {KIND_META[naming.tpl.kind].label.toLowerCase()}</h2>
+            <div className="field" style={{ marginTop: 10 }}>
+              <label>Name</label>
+              <input
+                type="text"
+                autoFocus
+                placeholder={naming.tpl.hint}
+                value={naming.title}
+                onChange={(e) => setNaming({ ...naming, title: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && naming.title.trim()) { createFile(naming.tpl, naming.title); setNaming(null); }
+                  if (e.key === "Escape") setNaming(null);
+                }}
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setNaming(null)}>Cancel</button>
+              <button
+                className="btn"
+                disabled={!naming.title.trim()}
+                onClick={() => { createFile(naming.tpl, naming.title); setNaming(null); }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

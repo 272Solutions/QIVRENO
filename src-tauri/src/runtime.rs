@@ -786,6 +786,10 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
          - Dashboard: <name>.dash.json — {\"title\":\"…\",\"widgets\":[{\"type\":\"stat\",\"label\":\"…\",\"value\":\"…\",\"sub\":\"…\"},\
 {\"type\":\"bar\",\"label\":\"…\",\"data\":[{\"x\":\"Jan\",\"y\":12}]},{\"type\":\"line\",\"label\":\"…\",\"data\":[{\"x\":\"W1\",\"y\":3}]},\
 {\"type\":\"table\",\"label\":\"…\",\"headers\":[\"…\"],\"rows\":[[\"…\"]]}]}\n\
+         Name every shared file after its content, in plain Title Case — e.g. \
+         \"Shared/Q3 Sales Dashboard.dash.json\", \"Shared/Vendor Cost Review.md\". Never use \
+         \"Untitled\" or generic names like \"report.md\"; if a file would collide, refine the \
+         name rather than numbering it. Keep the extensions exactly as listed.\n\
          Teammates collaborate on these files — read a file before improving it, and mention the \
          exact file name when handing work to a teammate.\n",
     );
