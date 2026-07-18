@@ -590,6 +590,30 @@ fn compose_report(app: &AppHandle, task_id: &str, agent: &Agent, raw_result: &st
         }
     }
 
+    // The log only sees the built-in tool loop; CLI agents (Claude/Codex)
+    // write Shared files directly. Catch those from the filesystem: anything
+    // modified since this task started counts as a deliverable of the run.
+    if let Ok(entries) = std::fs::read_dir(&shared) {
+        for entry in entries.flatten() {
+            if !entry.path().is_file() {
+                continue;
+            }
+            let modified_ms = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            if modified_ms >= task.created_at {
+                let rel = format!("Shared/{}", entry.file_name().to_string_lossy());
+                if !written_files.contains(&rel) {
+                    written_files.push(rel);
+                }
+            }
+        }
+    }
+
     let deliverables_rule = if written_files.is_empty() {
         "You created NO files in this run — the Deliverables section MUST say 'None'. Do not list \
          any file, document format, or artifact."
@@ -624,11 +648,54 @@ fn compose_report(app: &AppHandle, task_id: &str, agent: &Agent, raw_result: &st
         )
     })?;
     let report = crate::ollama::strip_thinking(&report);
+    let report = sanitize_deliverables(&report, &written_files);
     if report.trim().len() < 80 {
         return None;
     }
     log_task_line(app, task_id, "review report composed");
     Some(report)
+}
+
+/// Small report models sometimes invent files under "### Deliverables"
+/// despite explicit instructions. The set of files actually written this
+/// run is known exactly, so enforce it in code: drop every line in that
+/// section that does not name a real file, and fall back to "None" (or a
+/// plain listing of the real files) when nothing legitimate survives.
+fn sanitize_deliverables(report: &str, written_files: &[String]) -> String {
+    let Some(heading) = report.find("### Deliverables") else {
+        return report.to_string();
+    };
+    let body_start = match report[heading..].find('\n') {
+        Some(i) => heading + i + 1,
+        None => report.len(),
+    };
+    let (body, rest) = match report[body_start..].find("\n### ") {
+        Some(i) => (&report[body_start..body_start + i], &report[body_start + i + 1..]),
+        None => (&report[body_start..], ""),
+    };
+    let kept: Vec<&str> = body
+        .lines()
+        .filter(|line| {
+            written_files.iter().any(|f| {
+                let name = f.strip_prefix("Shared/").unwrap_or(f);
+                line.contains(name)
+            })
+        })
+        .collect();
+    let new_body = if !kept.is_empty() {
+        kept.join("\n")
+    } else if written_files.is_empty() {
+        "None".to_string()
+    } else {
+        // The model described real files unrecognizably — list them plainly.
+        written_files.iter().map(|f| format!("- {f}")).collect::<Vec<_>>().join("\n")
+    };
+    let mut out = format!("{}{}\n", &report[..body_start], new_body);
+    if !rest.is_empty() {
+        out.push('\n');
+        out.push_str(rest);
+    }
+    out
 }
 
 fn run_backend(

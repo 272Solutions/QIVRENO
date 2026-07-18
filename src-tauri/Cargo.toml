@@ -1,6 +1,6 @@
 [package]
 name = "agent-workspace"
-version = "1.4.3"
+version = "1.4.4"
 description = "Qivreno — a team of up to 12 autonomous AI agents"
 authors = ["272 Solutions LLC"]
 edition = "2021"
