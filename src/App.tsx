@@ -9,6 +9,12 @@ import {
   Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
+
+/* Platform-aware UI strings: the same build runs on macOS and Windows. */
+const IS_MAC = navigator.userAgent.includes("Mac");
+const MOD_ENTER = IS_MAC ? "\u2318\u21B5" : "Ctrl+\u21B5";
+const MACHINE = IS_MAC ? "Mac" : "computer";
+const REVEAL_LABEL = IS_MAC ? "Open in Finder" : "Show in Explorer";
 import "./App.css";
 
 type View =
@@ -71,7 +77,7 @@ const NO_AVAIL: Availability = {
 const BACKENDS: BackendKind[] = ["builtin", "ollama", "lmstudio", "claude", "codex", "gemini", "grok"];
 
 const BACKEND_SUB: Record<BackendKind, string> = {
-  builtin: "Zero setup — runs on this Mac",
+  builtin: `Zero setup — runs on this ${MACHINE}`,
   ollama: "Local, private, free",
   lmstudio: "Local, OpenAI-compatible",
   claude: "Claude Code CLI",
@@ -91,7 +97,7 @@ interface Guide {
 const GUIDES: Partial<Record<BackendKind, Guide>> = {
   ollama: {
     title: "Set up Ollama",
-    intro: "Ollama runs open models entirely on this Mac — private and free.",
+    intro: `Ollama runs open models entirely on this ${MACHINE} — private and free.`,
     steps: [
       "Download Ollama and install it (drag to Applications, then open it once — a llama icon appears in the menu bar).",
       "Open Terminal and run:  ollama pull qwen3:8b   (≈5 GB; a capable model that supports tools).",
@@ -195,7 +201,7 @@ function BuiltinPanel(props: { onChanged: () => void }) {
       {st.running ? (
         <>
           <div className="guide-intro">
-            ● Running — {st.model_name} entirely on this Mac. Agents on this backend need no other setup.
+            ● Running — {st.model_name} entirely on this {MACHINE}. Agents on this backend need no other setup.
           </div>
           <div className="guide-actions">
             <button className="btn ghost sm" onClick={disable}>Turn off</button>
@@ -216,7 +222,7 @@ function BuiltinPanel(props: { onChanged: () => void }) {
         <>
           <div className="guide-intro">
             One click, no third-party installs: Qivreno downloads {st.model_name} (~{st.model_size_gb} GB,
-            picked for this Mac's {st.ram_gb} GB RAM) and runs it with the bundled engine. Private — nothing leaves this Mac.
+            picked for this {MACHINE}'s {st.ram_gb} GB RAM) and runs it with the bundled engine. Private — nothing leaves this {MACHINE}.
           </div>
           {st.error && <div className="guide-intro" style={{ color: "var(--red)" }}>Last attempt failed: {st.error}</div>}
           <div className="guide-actions">
@@ -312,7 +318,7 @@ function BackendPicker(props: {
   onPick: (b: BackendKind) => void;
 }) {
   const groups: { label: string; items: BackendKind[] }[] = [
-    { label: "Private — runs on this Mac", items: ["builtin", "ollama", "lmstudio"] },
+    { label: `Private — runs on this ${MACHINE}`, items: ["builtin", "ollama", "lmstudio"] },
     { label: "Cloud — your own account", items: ["claude", "codex", "gemini", "grok"] },
   ];
   return (
@@ -860,7 +866,7 @@ function GetStartedModal(props: {
             <button className="btn" onClick={props.onQuickStart}>✨ Quick Start Team</button>
           ) : (
             <button className="btn" disabled={busy} onClick={dispatch}>
-              {busy ? "Dispatching…" : "Dispatch to team ⌘↵"}
+              {busy ? "Dispatching…" : `Dispatch to team ${MOD_ENTER}`}
             </button>
           )}
         </div>
@@ -962,7 +968,7 @@ function KanbanBoard(props: {
               Add to Backlog
             </button>
             <button className="btn" disabled={!prompt.trim() || snap.agents.length === 0} onClick={() => submit(false)}>
-              Dispatch Now ⌘↵
+              Dispatch Now {MOD_ENTER}
             </button>
           </div>
         </div>
@@ -1511,7 +1517,7 @@ const NEW_FILE_TEMPLATES: { kind: string; ext: string; hint: string; briefHint: 
     kind: "document", ext: ".md",
     hint: "e.g. Vendor Cost Review",
     briefHint: "e.g. Compare our top 5 vendors on cost and reliability, recommend which to renegotiate",
-    make: (t) => `# ${t}\n\nStart writing…\n`,
+    make: (t) => `# ${t}\n`,
   },
   {
     kind: "spreadsheet", ext: ".csv",
@@ -1991,7 +1997,7 @@ function FilesView(props: {
         </div>
         <div className="spacer" />
         <button className="btn ghost sm" onClick={() => invoke("reveal_shared", { name: null }).catch(() => {})}>
-          Open in Finder
+          {REVEAL_LABEL}
         </button>
       </div>
       <div className="main-body lib-body">
@@ -2145,7 +2151,7 @@ function FilesView(props: {
                 disabled={!naming.title.trim() || !naming.brief.trim()}
                 onClick={() => { buildFile(naming.tpl, naming.title, naming.brief); setNaming(null); }}
               >
-                Ask the team ⌘↵
+                Ask the team {MOD_ENTER}
               </button>
             </div>
           </div>
@@ -2641,7 +2647,7 @@ function AgentModal(props: {
             </button>
             <button className={`radio-card ${permission === "full" ? "selected" : ""}`} onClick={() => setPermission("full")}>
               <div className="rc-title">⚡ Full access</div>
-              <div className="rc-sub">Can run any command and touch any file on this Mac</div>
+              <div className="rc-sub">Can run any command and touch any file on this {MACHINE}</div>
             </button>
           </div>
         </div>
@@ -2739,7 +2745,7 @@ function ConnectEmailModal(props: {
         <h2>Connect your email</h2>
         <p className="hint" style={{ marginBottom: 12 }}>
           Qivreno reads incoming mail and turns real requests into task proposals you approve.
-          Nothing is sent, nothing is marked read, and your password stays on this Mac.
+          Nothing is sent, nothing is marked read, and your password stays on this {MACHINE}.
         </p>
         <div className="field">
           <label>Your email provider</label>
@@ -2816,7 +2822,7 @@ function ConnectAIModal(props: {
 }) {
   const [picked, setPicked] = useState<BackendKind | null>(null);
   const groups: { label: string; items: BackendKind[] }[] = [
-    { label: "Private — runs on this Mac", items: ["builtin", "ollama", "lmstudio"] },
+    { label: `Private — runs on this ${MACHINE}`, items: ["builtin", "ollama", "lmstudio"] },
     { label: "Cloud — your own account", items: ["claude", "codex", "gemini", "grok"] },
   ];
   return (
@@ -2824,7 +2830,7 @@ function ConnectAIModal(props: {
       <div className="modal" style={{ maxWidth: 480 }}>
         <h2>Connect an AI model</h2>
         <p className="hint" style={{ marginBottom: 12 }}>
-          Qivreno's Built-in AI already runs on this Mac for free. Connect a cloud model for
+          Qivreno's Built-in AI already runs on this {MACHINE} for free. Connect a cloud model for
           stronger results using your own account — pick one for a guided setup.
         </p>
         {groups.map((g) => (
@@ -2873,7 +2879,7 @@ function CancelSubscriptionModal(props: {
         <p style={{ marginTop: 6 }}>Cancelling stops the renewal. Here is what that means:</p>
         <ul style={{ lineHeight: 1.9, paddingLeft: 22, margin: "10px 0 14px" }}>
           <li>Your team keeps working until the end of the period you already paid for.</li>
-          <li>After that, agents pause. <b>Nothing is deleted</b> — your files, Library, board, and agent memories stay on this Mac.</li>
+          <li>After that, agents pause. <b>Nothing is deleted</b> — your files, Library, board, and agent memories stay on this {MACHINE}.</li>
           <li>Resubscribing later picks up right where you left off.</li>
         </ul>
         <p style={{ color: "var(--dim, #6B7280)", fontSize: 13.5 }}>
@@ -2931,8 +2937,8 @@ function SubscriptionModal(props: {
           {props.settings.license_refresh_token
             ? cancelledUntil > 0
               ? `Renewal cancelled — access continues until ${new Date(cancelledUntil).toLocaleDateString()}.`
-              : "Activated on this Mac — your license renews automatically in the background."
-            : "Paste the activation code from your purchase email (it activates this Mac and renews automatically), or a license key issued by 272 Solutions."}
+              : `Activated on this ${MACHINE} — your license renews automatically in the background.`
+            : `Paste the activation code from your purchase email (it activates this ${MACHINE} and renews automatically), or a license key issued by 272 Solutions.`}
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 10 }}>
           {!props.settings.license_refresh_token && props.license.state !== "licensed" && (
@@ -3215,7 +3221,10 @@ function SettingsModal(props: {
     },
     {
       icon: "📅", title: "Calendar",
-      status: "● Built in — agents read your Mac Calendar and can book events", tone: "up",
+      status: IS_MAC
+        ? "● Built in — agents read your Mac Calendar and can book events"
+        : "Agents are date-aware today — Windows calendar integration is coming",
+      tone: IS_MAC ? "up" : "",
     },
     {
       icon: "🎨", title: "Deck branding",

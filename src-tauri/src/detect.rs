@@ -20,9 +20,20 @@ fn find_on_path(bin: &str) -> Option<String> {
 }
 
 pub fn detect_claude() -> Option<String> {
-    let local = crate::platform::home_dir().join(".claude").join("local").join("claude");
-    if local.is_file() {
-        return Some(local.to_string_lossy().into_owned());
+    let home = crate::platform::home_dir();
+    let mut candidates = vec![home.join(".claude").join("local").join("claude")];
+    if cfg!(windows) {
+        // Windows installs don't put a `claude` shim on PATH: the native
+        // installer targets ~\.local\bin, npm globals land in %APPDATA%\npm.
+        candidates.push(home.join(".local").join("bin").join("claude.exe"));
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            candidates.push(std::path::PathBuf::from(&appdata).join("npm").join("claude.cmd"));
+        }
+    }
+    for c in candidates {
+        if c.is_file() {
+            return Some(c.to_string_lossy().into_owned());
+        }
     }
     find_on_path("claude")
 }

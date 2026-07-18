@@ -229,7 +229,7 @@ pub fn default_license_server() -> String {
 }
 
 /// Bump when docs/TERMS.md changes materially — users re-accept in-app.
-pub const TERMS_VERSION: u32 = 1;
+pub const TERMS_VERSION: u32 = 2;
 
 impl Default for Settings {
     fn default() -> Self {

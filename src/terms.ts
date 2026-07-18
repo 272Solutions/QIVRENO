@@ -2,7 +2,7 @@
 // TERMS_VERSION here AND in src-tauri/src/models.rs on material changes
 // (users are re-prompted to accept).
 
-export const TERMS_VERSION = 1;
+export const TERMS_VERSION = 2;
 
 export const TERMS_MD = `# Qivreno Terms & Conditions
 
@@ -79,7 +79,7 @@ You may stop using the Software at any time. We may terminate or suspend your li
 
 ## 15. Governing Law
 
-These Terms are governed by the laws of the State of [STATE — to be set by 272 Solutions LLC], without regard to conflict-of-law rules. Exclusive venue lies in the state and federal courts located there.
+These Terms are governed by the laws of the State of North Carolina, without regard to conflict-of-law rules. Exclusive venue lies in the state and federal courts located there.
 
 ## 16. Contact
 
