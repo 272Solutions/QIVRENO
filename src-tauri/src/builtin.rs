@@ -171,7 +171,9 @@ fn spawn_server(app: &AppHandle, engine: &PathBuf, model: &PathBuf) -> Result<()
     let port = state.settings.lock().unwrap().builtin_port;
     let log = std::fs::File::create(state.data_dir.join("builtin-engine.log"))
         .map_err(|e| e.to_string())?;
-    let child = Command::new(engine.join(crate::platform::engine_binary()))
+    let mut cmd = Command::new(engine.join(crate::platform::engine_binary()));
+    crate::platform::hide_console(&mut cmd);
+    let child = cmd
         .args([
             "-m",
             model.to_string_lossy().as_ref(),

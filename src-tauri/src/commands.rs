@@ -230,15 +230,20 @@ pub fn reveal_shared(state: State<'_, AppState>, name: Option<String>) -> Result
     crate::platform::reveal(&target, target.is_file())
 }
 
+/// Async: `status` probes the engine's health endpoint and (on first call)
+/// the machine's RAM — that work must stay off the main thread, and the UI
+/// polls this every 1.2s while the Built-in AI panel is open.
 #[tauri::command]
-pub fn builtin_status(app: AppHandle) -> crate::builtin::BuiltinStatus {
-    crate::builtin::status(&app)
+pub async fn builtin_status(app: AppHandle) -> crate::builtin::BuiltinStatus {
+    tauri::async_runtime::spawn_blocking(move || crate::builtin::status(&app))
+        .await
+        .expect("builtin_status probe panicked")
 }
 
 /// Turn on the built-in AI engine: downloads the model on first use, then
 /// starts the bundled server. Progress is polled via builtin_status.
 #[tauri::command]
-pub fn builtin_enable(app: AppHandle) -> Result<(), String> {
+pub async fn builtin_enable(app: AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
     {
         let mut settings = state.settings.lock().unwrap();
@@ -251,7 +256,7 @@ pub fn builtin_enable(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn builtin_disable(app: AppHandle) -> Result<(), String> {
+pub async fn builtin_disable(app: AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
     {
         let mut settings = state.settings.lock().unwrap();
@@ -332,8 +337,12 @@ pub async fn cancel_subscription(app: AppHandle) -> Result<u64, String> {
 
 #[tauri::command]
 pub async fn check_availability(app: AppHandle) -> Availability {
-    let state = app.state::<AppState>();
-    detect::availability(&state)
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        detect::availability(&state)
+    })
+    .await
+    .expect("availability probe panicked")
 }
 
 #[derive(Deserialize)]

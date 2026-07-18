@@ -5,6 +5,20 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+/// On Windows, every spawned console process opens a visible console window
+/// unless CREATE_NO_WINDOW is set — GUI apps must set it on all child
+/// processes (engine server, taskkill, CLI backends, shell tools).
+/// No-op elsewhere.
+pub fn hide_console(c: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        c.creation_flags(CREATE_NO_WINDOW);
+    }
+    c
+}
+
 pub fn home_dir() -> PathBuf {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
@@ -18,6 +32,7 @@ pub fn shell_command(command_line: &str) -> Command {
     {
         let mut c = Command::new("cmd");
         c.arg("/C").arg(command_line);
+        hide_console(&mut c);
         c
     }
     #[cfg(not(windows))]
@@ -30,7 +45,9 @@ pub fn shell_command(command_line: &str) -> Command {
 
 pub fn kill_pid(pid: u32) {
     #[cfg(windows)]
-    Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).status().ok();
+    hide_console(Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]))
+        .status()
+        .ok();
     #[cfg(not(windows))]
     Command::new("kill").arg("-9").arg(pid.to_string()).status().ok();
 }
@@ -38,7 +55,9 @@ pub fn kill_pid(pid: u32) {
 /// Kill stray built-in engine processes from previous app runs.
 pub fn kill_stray_engines() {
     #[cfg(windows)]
-    Command::new("taskkill").args(["/F", "/IM", "llama-server.exe"]).status().ok();
+    hide_console(Command::new("taskkill").args(["/F", "/IM", "llama-server.exe"]))
+        .status()
+        .ok();
     #[cfg(not(windows))]
     Command::new("/usr/bin/pkill").args(["-f", "engine/llama-server"]).status().ok();
 }
@@ -67,29 +86,35 @@ pub fn reveal(path: &std::path::Path, is_file: bool) -> Result<(), String> {
     }
 }
 
+/// Installed RAM. Cached: the answer never changes while the app runs, and
+/// probing it costs a process spawn (PowerShell on Windows) — callers poll
+/// this via builtin_status, so an uncached probe would spawn constantly.
 pub fn ram_gb() -> u64 {
-    #[cfg(windows)]
-    {
-        let out = Command::new("powershell")
-            .args([
+    use std::sync::OnceLock;
+    static RAM: OnceLock<u64> = OnceLock::new();
+    *RAM.get_or_init(|| {
+        #[cfg(windows)]
+        {
+            let out = hide_console(Command::new("powershell").args([
                 "-NoProfile",
                 "-Command",
                 "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
-            ])
+            ]))
             .output();
-        out.ok()
-            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
-            .map(|b| b / 1_073_741_824)
-            .unwrap_or(8)
-    }
-    #[cfg(not(windows))]
-    {
-        let out = Command::new("/usr/sbin/sysctl").args(["-n", "hw.memsize"]).output();
-        out.ok()
-            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
-            .map(|b| b / 1_073_741_824)
-            .unwrap_or(8)
-    }
+            out.ok()
+                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
+                .map(|b| b / 1_073_741_824)
+                .unwrap_or(8)
+        }
+        #[cfg(not(windows))]
+        {
+            let out = Command::new("/usr/sbin/sysctl").args(["-n", "hw.memsize"]).output();
+            out.ok()
+                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
+                .map(|b| b / 1_073_741_824)
+                .unwrap_or(8)
+        }
+    })
 }
 
 /// Stable hardware identifier for license device-binding. Copying app data
@@ -114,13 +139,12 @@ pub fn hardware_uuid() -> String {
         }
         #[cfg(windows)]
         {
-            let out = Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-Command",
-                    "(Get-CimInstance Win32_ComputerSystemProduct).UUID",
-                ])
-                .output();
+            let out = hide_console(Command::new("powershell").args([
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_ComputerSystemProduct).UUID",
+            ]))
+            .output();
             if let Ok(out) = out {
                 let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 if !v.is_empty() {
@@ -136,7 +160,7 @@ pub fn hardware_uuid() -> String {
 
 pub fn hostname() -> String {
     #[cfg(windows)]
-    let out = Command::new("hostname").output();
+    let out = hide_console(&mut Command::new("hostname")).output();
     #[cfg(not(windows))]
     let out = Command::new("/bin/hostname").arg("-s").output();
     out.ok()

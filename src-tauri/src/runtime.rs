@@ -938,6 +938,7 @@ fn run_child(
     stdin_data: Option<String>,
 ) -> Result<(i32, String, String), String> {
     let state = app.state::<AppState>();
+    crate::platform::hide_console(&mut cmd);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if stdin_data.is_some() { Stdio::piped() } else { Stdio::null() });
     let mut child = cmd.spawn().map_err(|e| format!("failed to launch: {e}"))?;

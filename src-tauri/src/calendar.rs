@@ -92,9 +92,12 @@ fn js_str(s: &str) -> String {
 /// Uses the OS `date` command (locale-correct, no date crate needed).
 pub fn today_string() -> String {
     #[cfg(target_os = "windows")]
-    let out = std::process::Command::new("cmd")
-        .args(["/C", "powershell -NoProfile -Command \"Get-Date -Format 'dddd, yyyy-MM-dd'\""])
-        .output();
+    let out = crate::platform::hide_console(std::process::Command::new("powershell").args([
+        "-NoProfile",
+        "-Command",
+        "Get-Date -Format 'dddd, yyyy-MM-dd'",
+    ]))
+    .output();
     #[cfg(not(target_os = "windows"))]
     let out = std::process::Command::new("date").args(["+%A, %Y-%m-%d"]).output();
 
