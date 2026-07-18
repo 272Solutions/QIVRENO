@@ -5,7 +5,13 @@
 # Secrets to add later (Settings → Secrets → Actions):
 #   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
 #   APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID          (macOS notarization)
-#   WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD (Windows code signing)
+# Windows signing via Azure Trusted Signing (all six required):
+#   AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET
+#     (an Entra app registration granted the "Trusted Signing Certificate
+#      Profile Signer" role on the signing account)
+#   AZURE_SIGNING_ENDPOINT  e.g. https://eus.codesigning.azure.net
+#   AZURE_SIGNING_ACCOUNT   the Trusted Signing account name
+#   AZURE_SIGNING_PROFILE   the certificate profile name
 # Unsigned builds work without any secrets — fine for internal testing.
 
 name: release
@@ -77,6 +83,39 @@ jobs:
             echo "$APPLE_API_KEY_P8" | base64 --decode > ~/.appleconnect/AuthKey.p8
             echo "APPLE_API_KEY_PATH=$HOME/.appleconnect/AuthKey.p8" >> "$GITHUB_ENV"
           fi
+
+      # Windows signing via Azure Trusted Signing. Tauri's bundler runs
+      # bundle.windows.signCommand for the exe and each installer; we inject
+      # that command only when the Azure secrets are configured, so unsigned
+      # builds keep working with no secrets (same pattern as Apple above).
+      - name: Enable Windows signing (Azure Trusted Signing, only when secrets are set)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          if (-not $env:AZURE_CLIENT_SECRET) {
+            Write-Host "Azure Trusted Signing secrets not configured - building unsigned."
+            exit 0
+          }
+          cargo install trusted-signing-cli --locked
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $sign = "trusted-signing-cli -e $env:AZURE_SIGNING_ENDPOINT -a $env:AZURE_SIGNING_ACCOUNT -c $env:AZURE_SIGNING_PROFILE %1"
+          if (-not $conf.bundle.PSObject.Properties['windows']) {
+            $conf.bundle | Add-Member -MemberType NoteProperty -Name windows -Value ([pscustomobject]@{})
+          }
+          $conf.bundle.windows | Add-Member -MemberType NoteProperty -Name signCommand -Value $sign -Force
+          $conf | ConvertTo-Json -Depth 64 | Set-Content src-tauri/tauri.conf.json -Encoding utf8
+          Write-Host "signCommand injected for Azure Trusted Signing."
+          # The CLI authenticates with these at build time:
+          "AZURE_TENANT_ID=$env:AZURE_TENANT_ID"         >> $env:GITHUB_ENV
+          "AZURE_CLIENT_ID=$env:AZURE_CLIENT_ID"         >> $env:GITHUB_ENV
+          "AZURE_CLIENT_SECRET=$env:AZURE_CLIENT_SECRET" >> $env:GITHUB_ENV
 
       - name: Build app
         uses: tauri-apps/tauri-action@v0
