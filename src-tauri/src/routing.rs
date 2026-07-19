@@ -44,7 +44,7 @@ fn route_via_llm(
     let roster: String = agents
         .iter()
         .enumerate()
-        .map(|(i, a)| format!("{}. {} — {}: {}", i + 1, a.name, a.role, a.skills))
+        .map(|(i, a)| format!("{}. {} — {}: {}", i + 1, a.name, a.role, a.skills_summary()))
         .collect::<Vec<_>>()
         .join("\n");
     let prompt = format!(

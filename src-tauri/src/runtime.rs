@@ -803,7 +803,7 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         agents
             .iter()
             .filter(|a| a.id != agent.id)
-            .map(|a| format!("- {} — {} ({})", a.name, a.role, a.skills))
+            .map(|a| format!("- {} — {} ({})", a.name, a.role, a.skills_summary()))
             .collect::<Vec<_>>()
             .join("\n")
     };

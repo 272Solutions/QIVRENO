@@ -50,6 +50,30 @@ pub struct Agent {
     pub created_at: u64,
 }
 
+impl Agent {
+    /// Short capability summary for teammate rosters and routing prompts.
+    /// Template skills open with a "<domain> per <framework> practice" anchor
+    /// before the first colon; that prefix is the summary. Only the agent's
+    /// own prompt carries the full skills text — injecting every teammate's
+    /// full playbook would blow the local-model context window.
+    pub fn skills_summary(&self) -> &str {
+        let s = self.skills.trim();
+        if let Some(i) = s.find(':') {
+            if (20..=220).contains(&i) {
+                return &s[..i];
+            }
+        }
+        let mut end = match s.find(';') {
+            Some(i) => i.min(160),
+            None => s.len().min(160),
+        };
+        while end < s.len() && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+}
+
 pub fn default_true() -> bool {
     true
 }
