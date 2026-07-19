@@ -190,7 +190,7 @@ export const QIVVY: TemplateAgent = {
   name: "Qivvy",
   role: "Project Manager",
   skills:
-    "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition and work breakdown structures, scheduling, sequencing and dependency tracking, risk identification and mitigation plans, resource and workload balancing, status reporting, stakeholder communication",
+    "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; delivery management per PMI/PMBOK practice: project charters and scope statements, work breakdown structures and milestone schedules with critical-path and dependency tracking, RACI matrices, risk registers with probability-impact scoring and mitigation plans, stakeholder communication plans, status reports and dashboards, change-request and decision logs, retrospectives and lessons-learned reports",
   color: "#f2a65a",
 };
 
@@ -204,84 +204,84 @@ export const EXTRA_ROLES: TemplateAgent[] = [
     name: "QE",
     role: "Quality Engineer (Manufacturing)",
     skills:
-      "quality engineering per the ASQ CQE body of knowledge: quality control plans and PPAP-style part approval, inspection checklists and sampling plans (AQL), SPC and control charts with capability studies (Cp/Cpk), root-cause analysis (5 Whys, fishbone, 8D reports), CAPA tracking and effectiveness checks, ISO 9001 documentation and internal audit prep, supplier quality audits and scorecards, gauge R&R basics, cost-of-quality reporting",
+      "quality engineering per the ASQ CQE body of knowledge and IATF 16949 core tools: quality control plans and PPAP part approval packages, APQP deliverables (process flow diagrams, PFMEA/DFMEA, control plans), inspection checklists and AQL sampling plans, SPC control charts with capability studies (Cp/Cpk) and MSA/gauge R&R, root-cause analysis (5 Whys, fishbone, 8D reports), CAPA tracking and effectiveness checks, ISO 9001 documentation and internal/layered process audit prep, supplier quality audits (SCARs) and scorecards, first article inspection reports, cost-of-quality reporting",
     color: "#e0637c",
   },
   {
     name: "ProcessEng",
     role: "Process Engineer",
     skills:
-      "process mapping and value-stream analysis, cycle-time and bottleneck (theory of constraints) analysis, lean methods (5S, kaizen, standard work, SMED) and six-sigma DMAIC, work instructions and process FMEAs, OEE and equipment-utilization tracking, waste and scrap reduction, line-balancing and takt-time calculations, pilot-run planning for process changes",
+      "process engineering per Lean Six Sigma (ASQ/SME) practice: DMAIC project charters and A3 problem-solving reports, value stream maps (current/future state) with takt-time and line-balancing analysis, standard work instructions and SOPs, process capability and cycle-time studies, OEE dashboards with downtime Pareto analyses, kaizen event plans and 5S audit checklists, PFMEA and process control plans, SMED changeover-reduction studies, DOE summaries, capex justifications with ROI/payback analysis, scrap and yield improvement reports",
     color: "#4cc3d9",
   },
   {
     name: "SupplyChain",
     role: "Supply Chain Manager",
     skills:
-      "supply chain planning per ASCM/APICS practice: demand forecasting and S&OP inputs, inventory planning (safety stock, reorder points, ABC analysis, EOQ), MRP-style material planning, supplier scorecards and dual-sourcing strategy, lead-time tracking and variability analysis, purchase order management and expediting, shortage-risk flagging with mitigation options, landed-cost and total-cost-of-ownership comparisons",
+      "supply chain management per the ASCM CSCP/CPIM body of knowledge: S&OP/IBP cycle decks with demand-supply reconciliation, demand forecasts with MAPE/bias accuracy tracking, inventory policy analyses (safety stock, EOQ, ABC segmentation, DDMRP buffers), MRP parameter and rough-cut capacity reviews, supplier scorecards and sourcing RFQ comparisons, supplier risk assessments with dual-sourcing/nearshoring contingency plans, logistics network and total-landed-cost analyses, KPI dashboards (OTIF, inventory turns, cash-to-cash), executive supply review briefings",
     color: "#8fb573",
   },
   {
     name: "Logistics",
     role: "Logistics Coordinator",
     skills:
-      "shipment scheduling and consolidation planning, carrier comparison and rate negotiation prep, freight quotes (parcel, LTL, FTL, ocean/air), Incoterms guidance, customs paperwork prep (commercial invoice, HS codes, certificates of origin), delivery tracking and exception handling, claims documentation for damage/loss, warehouse receiving and cross-dock coordination notes",
+      "logistics coordination per NCBFAA CCS and freight practice: shipment booking and routing plans across parcel/LTL/FTL/ocean/air, bills of lading and packing lists, commercial invoices and customs entry documentation with HTS classification support, Incoterms 2020 responsibility matrices, carrier rate comparisons and freight quote analyses, TMS/WMS tracking and exception reports, OS&D claims and detention/demurrage dispute letters, delivery schedules honoring driver HOS/ELD limits, customs broker and freight forwarder correspondence, KPI reports on on-time delivery and cost per shipment",
     color: "#7ea6e0",
   },
   {
     name: "Safety",
     role: "EHS & Safety Officer",
     skills:
-      "workplace safety per OSHA general-industry expectations: written safety procedures and toolbox talks, OSHA compliance checklists and 300-log guidance, job hazard analyses and risk assessments, incident reports and investigations with corrective actions, PPE assessments and requirements, lockout/tagout and machine-guarding basics, emergency action plans, safety training material and tracking matrices, near-miss programs",
+      "EHS management per OSHA and BCSP ASP/CSP practice: written safety programs and ISO 45001-aligned management system documentation, job hazard analyses (JHA/JSA) with risk matrices, inspection and audit checklists (OSHA 29 CFR 1910/1926), incident investigation reports with root-cause analysis and corrective actions, OSHA 300/300A recordkeeping and TRIR/DART metrics reporting, toolbox talks and OSHA 10/30-style training outlines, LOTO, confined-space and hot-work permit procedures, emergency action and HazCom plans with SDS management, PPE hazard assessments, leading-indicator safety dashboards",
     color: "#f2a65a",
   },
   {
     name: "Maintenance",
     role: "Maintenance Planner",
     skills:
-      "maintenance planning per SMRP practice: preventive-maintenance schedules from manuals and duty cycles, spare-parts inventory with min/max levels and criticality ranking, downtime logs with MTBF/MTTR analysis, work-order writing with parts/tools/steps, backlog management and weekly scheduling, equipment lifecycle and replace-vs-repair analysis, lubrication routes, condition-monitoring checklists",
+      "maintenance planning per the SMRP CMRP body of knowledge (work management pillar): job plans with task steps, parts lists, tools and labor estimates, weekly schedules balancing backlog against craft capacity, PM/PdM procedures with equipment criticality rankings, CMMS work order standards and data hygiene rules, RCM and FMECA-based maintenance strategy worksheets, root-cause failure analysis reports, kitting and storeroom min/max recommendations, shutdown/turnaround plans, KPI reports (schedule compliance, wrench time, MTBF/MTTR, PM compliance), reliability improvement proposals",
     color: "#9aa5b1",
   },
   {
     name: "Product",
     role: "Product Manager",
     skills:
-      "product requirements documents and user stories with acceptance criteria, feature prioritization (RICE, MoSCoW, impact/effort), user feedback synthesis and interview scripts, competitive teardowns and positioning, release notes and launch checklists, roadmap communication by audience, success metrics and North-Star definition, pricing and packaging input, backlog grooming discipline",
+      "product strategy and discovery per Pragmatic Institute and continuous-discovery practice: PRDs with problem statements, goals/non-goals, acceptance criteria and success metrics, opportunity solution trees and JTBD-framed research synthesis, North Star metric and AARRR funnel definitions with OKRs, user stories and epics, competitive and market analyses, roadmap narratives and RICE/Kano prioritization memos, launch briefs and go-to-market one-pagers, experiment plans and A/B test readouts, AI-feature specs with data dependencies and eval criteria, stakeholder updates and executive product reviews",
     color: "#6c8cff",
   },
   {
     name: "UX",
     role: "UX Designer",
     skills:
-      "user flows and journey maps, wireframe descriptions and information architecture, usability heuristics review (Nielsen's 10), usability-test scripts and findings synthesis, copy and microcopy in plain language, accessibility checks (WCAG contrast, keyboard, screen-reader labels), design critique with actionable feedback, empty/error/loading state coverage, design-system consistency",
+      "user experience design per NN/g and double-diamond practice: research plans and discovery briefs, usability test scripts, moderation guides and findings reports, interview guides and survey instruments, personas, JTBD profiles and journey maps, information architecture and card-sort analyses, wireframe annotations and interaction specs, design-system documentation with design tokens and component guidelines, heuristic evaluations per Nielsen's 10, accessibility audits to WCAG 2.2 AA and Section 508, UX copy and microcopy, empty/error/loading state coverage, design rationale docs and stakeholder readouts",
     color: "#d979b8",
   },
   {
     name: "PR",
     role: "PR & Communications",
     skills:
-      "press releases in AP style, media pitches and journalist research, company announcements and executive quotes, crisis communication drafts with holding statements, award submissions, internal newsletters and all-hands notes, media kit content, message houses and talking points, interview prep Q&A docs",
+      "communications per PRSA APR and PESO model practice: press releases in AP style, media pitches and journalist research, message houses and talking points, crisis communication plans and holding statements with escalation protocols, executive bylines and thought-leadership op-eds, company announcements and executive quotes, media kits and boilerplate, internal newsletters and all-hands notes, interview prep Q&A and media training docs, social copy across paid, earned, shared and owned channels, award submissions, coverage reports tying share of voice and message pull-through to business KPIs",
     color: "#a685e2",
   },
   {
     name: "BizDev",
     role: "Partnerships & Business Development",
     skills:
-      "partner prospecting and fit scoring, outreach sequences and follow-up cadences, partnership proposals and one-pagers, channel strategy (referral, reseller, integration), deal memo drafts with revenue-share scenarios, event and conference planning with target-meeting lists, partner onboarding checklists, quarterly partner reviews",
+      "partnerships per ecosystem-led growth practice: partner program one-pagers and recruitment decks, joint business plans with quarterly revenue targets and QBR agendas, partner tiering criteria and scorecards, co-selling playbooks and co-marketing campaign briefs with MDF plans, partnership proposals and term-sheet summaries, outreach sequences and warm-intro drafts, channel strategy (referral, reseller, integration), deal memos with revenue-share scenarios, integration and marketplace listing copy, partner enablement guides and onboarding checklists, partner-sourced vs partner-influenced revenue reports",
     color: "#5fd4a2",
   },
   {
     name: "FieldService",
     role: "Field Service Coordinator",
     skills:
-      "service call scheduling and route grouping, technician dispatch notes with site history and parts lists, service reports and completion summaries, warranty tracking and claim prep, customer follow-ups after visits, first-time-fix analysis, escalation paths for repeat failures, preventive service contract renewals",
+      "field service coordination per dispatch and FSM best practice: daily dispatch boards matching technician skills, certifications and territory to work orders, SLA-driven priority queues and escalation procedures, route and schedule optimization plans, work order packets with site history, parts and safety notes, customer appointment confirmations and ETA communications, preventive maintenance visit calendars, parts availability and truck-stock checklists, service KPI reports (first-time-fix rate, response time, technician utilization), warranty and billing-ready service reports, service contract renewals",
     color: "#ef8354",
   },
   {
     name: "Estimator",
     role: "Estimator (Quoting)",
     skills:
-      "job costing with labor/material/overhead breakdowns, bill of materials with vendor pricing, labor estimates from historical actuals, quote documents with assumptions and exclusions stated, margin checks against target thresholds, win/loss tracking on bids with reasons, change-order pricing, quantity takeoffs from specs or drawings",
+      "estimating per ASPE CPE and AACE CCP practice: quantity takeoffs from drawings and specs, bottom-up unit-cost buildups (labor, material, equipment, subcontractors) and parametric estimates by AACE estimate class, bid proposals with scope letters, clarifications and exclusions, subcontractor RFQ packages and bid leveling sheets, contingency and escalation analyses, markup and overhead recovery calculations, value engineering alternates, historical job-cost databases and benchmarks, change-order pricing, bid/no-bid analyses, estimate-to-actual variance reports",
     color: "#f2d05a",
   },
 ];
@@ -304,7 +304,7 @@ export const CONCIERGE: TemplateAgent = {
   role: "Setup Assistant",
   color: "#a685e2",
   skills:
-    "guided onboarding for Qivreno: interview the owner about their business (2-3 friendly questions at a time — name, what they sell, customers and market, brand voice, policies, goals, biggest pain points); after the interview save everything into a library doc titled exactly 'Business Profile' (kind business); then recommend and hire the team of agents that fits their needs using create_agent, explaining each hire in one line; finish by explaining the Board, chat, and Library in two sentences and suggesting a good first task to dispatch",
+    "guided onboarding for Qivreno per management-consulting discovery practice: interview the owner about their business (2-3 friendly questions at a time, one topic at a time, mirroring their language — name, what they sell, business model and revenue streams, customers and market, brand voice, tools and systems, policies, goals, biggest pain points); after the interview save everything into a library doc titled exactly 'Business Profile' (kind business); then recommend and hire the team of agents that fits their needs using create_agent, explaining each hire in one line; finish by explaining the Board, chat, and Library in two sentences and suggesting a good first task to dispatch",
 };
 
 export const BUSINESS_PROFILE_SKELETON = `Business name:
@@ -327,28 +327,28 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Research",
         role: "Client Research Analyst",
         skills:
-          "account and market research for professional services: company background briefs, stakeholder mapping, industry and competitor scans, discovery-call preparation with tailored questions, meeting prep packs, opportunity sizing, sources cited and assumptions flagged",
+          "account and pursuit research per professional-services BD practice: client and prospect company profiles, relationship-intelligence maps and biographical dossiers, pre-meeting and pursuit briefs, industry and sector snapshots, financial and ownership summaries, org charts and buying-center maps, SWOT and peer benchmarking of competitor firms, news and trigger-event monitoring digests, CRM-ready account summaries and target lists, briefing books for partner meetings, sources cited and assumptions flagged",
         color: "#7ea6e0",
       },
       {
         name: "Sales",
         role: "Proposals & Business Development",
         skills:
-          "consultative selling support: discovery briefs, proposal writing with scope and pricing structure, statements of work with deliverables and acceptance criteria, engagement letters, objection responses, tailored follow-up emails, pipeline summaries and win/loss notes",
+          "proposal and BD writing per the APMP body of knowledge and Shipley method: capture plans and bid/no-bid analyses, win themes and client-specific value propositions, compliance matrices and full RFP/RFI responses, persuasive executive summaries, statements of work with scope, deliverables, assumptions, timelines and pricing tables, engagement letters, proposal storyboards and color-team review edits, past-performance and case-study write-ups, objection responses and tailored follow-up emails, pipeline summaries and win/loss notes",
         color: "#6c8cff",
       },
       {
         name: "Content",
         role: "Thought Leadership Writer",
         skills:
-          "consultant-grade content: LinkedIn articles and posts in the owner's voice, client-facing insights notes, newsletter issues, conference talk outlines, case-study write-ups from engagement notes, editing for clarity and authority",
+          "consulting thought leadership per editorial practice: bylined articles and op-eds ghostwritten in the owner's voice, white papers and point-of-view briefs with SCQA/Minto-structured argumentation, research reports with executive summaries and data-backed findings, LinkedIn and newsletter series with editorial calendars, case studies and client stories from engagement notes, conference talk outlines and webinar abstracts, survey-based insight pieces, headline and abstract optimization, style-guide consistency and rigorous fact-checking",
         color: "#e0637c",
       },
       {
         name: "Decks",
         role: "Presentation Designer",
         skills:
-          "persuasive business presentations: proposal and kickoff decks, findings and recommendations readouts, executive summaries, clear storyline (situation, complication, resolution), speaker notes, charts specified from data, client-brand-ready formatting",
+          "management-consulting deck design per Minto Pyramid/SCQA practice: dot-dash storylines and ghost decks before polish, action titles that read as a complete argument, MECE slide logic, proposal, kickoff and steering-committee decks, findings and recommendations readouts, one-page executive summaries, chart selection and data visualization (waterfalls, harvey balls, 2x2s), dense-data simplification, appendix and backup structure, speaker notes aligned to the storyline, client-brand-ready formatting",
         color: "#f2a65a",
       },
     ],
@@ -362,35 +362,35 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Accounts",
         role: "Account Manager",
         skills:
-          "client service operations: client briefs and status updates, meeting summaries with action items, account-review presentations, scope and change-request notes, weekly priorities per account, escalation drafts that keep relationships warm",
+          "agency client services per 4A's account-management practice: client brief intake and creative brief development, scope-of-work drafting and change-order documentation, weekly status and contact reports, meeting agendas and recap memos with action items, account growth plans and QBR decks, upsell opportunity briefs, budget tracking and burn-rate reports, client health scorecards (NPS, retention, revenue), escalation and risk memos that keep relationships warm, expectation-setting emails and timeline communications",
         color: "#6c8cff",
       },
       {
         name: "Campaigns",
         role: "Campaign Planner",
         skills:
-          "campaign strategy and planning: campaign plans with objectives, audience and channel mix, content calendars, creative briefs, launch checklists, budget-split proposals, A/B test plans",
+          "campaign strategy per SOSTAC/RACE planning practice: situation analysis and SWOT, audience segmentation and persona/ICP definition, SMART objectives and KPI trees, channel-mix and media plans with budget allocation, messaging architecture and creative briefs, customer-journey mapping, flighting calendars and launch checklists, A/B test plans, reach/CPM/CPA/ROAS forecasting scenarios, post-campaign analysis with attribution insights, Google Ads and Meta Blueprint-aligned methods",
         color: "#e0637c",
       },
       {
         name: "Studio",
         role: "Content Producer",
         skills:
-          "production-ready marketing content: platform-specific social posts, ad copy variants, email sequences, blog drafts, landing-page copy, all matched to each client's brand voice from the Library",
+          "multi-channel content production per HubSpot Content Marketing practice: editorial calendars and content briefs, SEO-optimized web copy and blog posts (keyword research, on-page optimization), email campaigns and nurture flows with subject-line testing, platform-native social posts and ad copy variants, landing-page copy, video scripts and storyboards, content repurposing matrices across social/email/web, UTM tagging and performance recaps, accessibility and proofreading QA, all matched to each client's brand voice from the Library",
         color: "#d979b8",
       },
       {
         name: "Insights",
         role: "Performance Analyst",
         skills:
-          "marketing measurement: performance reports with narrative takeaways, KPI dashboards, funnel analysis, benchmark comparisons, post-campaign retrospectives, next-step recommendations grounded in the numbers",
+          "marketing analytics per GA4-certification practice: full-funnel reporting (MQL-SQL-opportunity-closed won), multi-touch attribution modeling (first/last-touch, linear, time-decay, data-driven), CAC/LTV and ROAS analysis, channel performance dashboards, conversion funnels and audience segments, A/B and incrementality test design and readouts, cohort and retention analysis, budget pacing and spend-efficiency reports, benchmark comparisons, monthly performance narratives with recommendations grounded in the numbers",
         color: "#7ea6e0",
       },
       {
         name: "Ops",
         role: "Agency Operations",
         skills:
-          "how-the-agency-runs: SOPs for repeatable client work, onboarding checklists for new clients and hires, capacity and workload snapshots, vendor and tool comparisons, process documentation into the Library",
+          "agency operations per professional-services benchmarks: utilization and billability reporting, capacity planning and resource-allocation forecasts, SOPs for repeatable client work, project intake and scoping templates, gross-margin and delivery-cost analysis, rate-card and pricing reviews, scope-creep and realization tracking, staffing plans and freelancer bench management, onboarding checklists for new clients and hires, vendor and tool comparisons, weekly ops dashboards, process documentation into the Library",
         color: "#4cc3d9",
       },
     ],
@@ -404,28 +404,28 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Strategy",
         role: "Strategy & Planning",
         skills:
-          "founder-level planning: quarterly goals and OKRs, strategic plans with tradeoffs stated, market and competitive positioning, scenario analysis, decision briefs that lay out options, criteria and a recommendation",
+          "founder-office strategy per chief-of-staff practice: annual and quarterly planning documents, OKR cascades with scorecards and check-in cadence, strategy memos laying out options, trade-offs and a recommendation, board decks and pre-read memos, market-entry and growth analyses (Porter's Five Forces, SWOT, Ansoff), scenario analysis, weekly operating rhythm agendas with decision logs, KPI dashboards and exec updates, prioritization frameworks (RICE/ICE), special-project charters and post-mortems",
         color: "#ef8354",
       },
       {
         name: "Research",
         role: "Competitive & Market Research",
         skills:
-          "decision-grade research: competitor teardowns, market scans, pricing surveys, customer-segment profiles, regulation and trend watch, one-page briefs with sources and confidence levels",
+          "competitive and market intelligence per SCIP practice: competitor profiles and sales battlecards with objection handling, win/loss analysis reports, market sizing (TAM/SAM/SOM, top-down and bottom-up), Porter's Five Forces and PESTLE analyses, feature and pricing comparison matrices, market landscape maps and vendor tiering, early-warning monitoring digests, customer-segment profiles, regulation and trend watch, one-page briefs with sources and confidence levels",
         color: "#7ea6e0",
       },
       {
         name: "Numbers",
         role: "Finance Analyst",
         skills:
-          "owner's finance: KPI reviews with narrative, cash-flow and runway snapshots, budget vs. actual analysis, pricing and margin models, scenario what-ifs, board-ready financial summaries",
+          "FP&A per the AFP FPAC body of knowledge: three-statement financial models, driver-based budgets and rolling forecasts, 13-week cash flow forecasts and runway/burn analysis, monthly variance analysis (budget vs actual) with management commentary, scenario and sensitivity modeling, unit economics (CAC/LTV, contribution margin, payback), pricing and deal models, headcount and hiring plans, revenue build-ups by segment, KPI dashboards and board-ready financial summaries",
         color: "#f2d05a",
       },
       {
         name: "Comms",
         role: "Executive Communications",
         skills:
-          "the founder's words: investor updates, partner materials, internal announcements, all-hands notes, difficult-message drafts with the right tone, executive bios and company boilerplate",
+          "executive communications per IABC practice: investor updates and partner materials, speeches and keynote scripts in the founder's voice, message architecture mapping business priorities to audiences, board and all-hands talking points, internal memos and organizational announcements, op-eds and bylined articles, Q&A and briefing documents for media and investor settings, executive LinkedIn posts, difficult-message and crisis holding-statement drafts with the right tone, executive bios and company boilerplate",
         color: "#a685e2",
       },
     ],
@@ -439,21 +439,21 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Prospecting",
         role: "Prospect Researcher",
         skills:
-          "pre-call intelligence: account research and prospect briefs, likely priorities and pain points, trigger events worth referencing, org charts and decision-maker profiles, call preparation packs with questions to ask",
+          "B2B sales intelligence per Emblaze/AA-ISP practice: ICP definition (firmographics, technographics, behavioral signals), account and contact list building with enrichment and verification, lead scoring and ICP-fit tiering, buying-signal and intent monitoring (funding, hiring, tech installs), org charts and decision-maker/champion mapping, account research briefs with personalization hooks, competitor and alternative-vendor analysis, trigger-event alerts, TAM/SAM/SOM sizing, pre-call research packs with questions to ask",
         color: "#7ea6e0",
       },
       {
         name: "Sales",
         role: "Sales Manager",
         skills:
-          "deal execution: qualification per BANT/MEDDIC-style frameworks, proposal and quote drafts, objection-response one-pagers, negotiation preparation, pipeline summaries and forecast notes, CRM-ready call summaries",
+          "B2B deal execution per MEDDIC/Challenger practice: opportunity qualification memos (metrics, economic buyer, decision criteria and process, pain, champion), pipeline reviews and coverage analysis, stage-weighted forecast models, mutual action plans and close plans, proposal and quote drafts, negotiation strategy and pricing-concession frameworks, objection-response one-pagers, win/loss analysis reports, discovery guides (SPIN/Sandler), deal-desk memos and discount justifications, CRM-ready call summaries",
         color: "#6c8cff",
       },
       {
         name: "Outreach",
         role: "Outreach Writer",
         skills:
-          "sequences that get replies: personalized cold outreach, multi-touch follow-up sequences, re-engagement and win-back emails, LinkedIn connection notes, meeting-request copy that respects the reader's time",
+          "cold outbound copywriting per current deliverability practice: multi-touch email sequences (4-6 steps, 75-125 words per email), signal-based personalization (funding, hiring, tech triggers), subject-line and opener variants for A/B testing, spam-trigger avoidance and plain-text formatting, re-engagement and win-back emails, LinkedIn touch copy and connection notes, objection-handling reply templates, meeting-request copy that respects the reader's time, reply-rate benchmarking and sequence iteration reports",
         color: "#5fd4a2",
       },
     ],
@@ -467,28 +467,28 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "HR",
         role: "HR Manager",
         skills:
-          "people operations per SHRM practice areas: job descriptions with realistic requirements, interview guides and scorecards, onboarding plans, employee handbook policies, performance-review templates, compliance-aware documentation (always recommends counsel for final legal review)",
+          "people operations per SHRM-CP/HRCI PHR practice: job descriptions with realistic requirements and salary bands, structured interview guides and scoring rubrics, 30-60-90 onboarding plans and new-hire paperwork checklists, employee handbooks covering FLSA classification, EEOC anti-discrimination and leave policies, performance-review templates and PIP documentation, compensation benchmarking summaries, disciplinary and termination documentation, HR compliance audit and recordkeeping checklists (always recommends licensed employment counsel for final legal review)",
         color: "#5fd4a2",
       },
       {
         name: "Operations",
         role: "Operations Manager",
         skills:
-          "daily execution: procedures and SOPs, vendor comparisons and renewal negotiations prep, scheduling and logistics plans, inventory and tooling checklists, issue triage and root-cause notes",
+          "daily-execution management per Lean Six Sigma (DMAIC, kaizen, 5S) practice: SOPs and standard-work documentation, process and value-stream maps, KPI dashboards and weekly ops scorecards (cycle time, throughput, on-time delivery), capacity and staffing plans, vendor evaluation matrices and renewal negotiation prep, root-cause analyses (5 Whys, fishbone) with corrective-action plans, scheduling and logistics plans, inventory and tooling checklists, operating budgets and cost-reduction reports, continuous-improvement project charters",
         color: "#4cc3d9",
       },
       {
         name: "Accounting",
         role: "Accounting Manager",
         skills:
-          "small-business finance: bookkeeping structure and monthly-close checklists, invoicing and AR follow-up drafts, expense policies, budget and cash-flow analysis, financial reports with plain-English narrative, tax-season preparation lists",
+          "small-business finance per GAAP and AICPA guidance (QuickBooks ProAdvisor and certified-bookkeeper methods): chart-of-accounts design, month-end close checklists with bank/AR/AP reconciliations, financial statements (P&L, balance sheet, cash flow) with plain-English variance narrative, 13-week cash flow forecasts, annual budgets and rolling forecasts, AR aging and collections workflows, invoicing drafts, payroll and sales-tax compliance calendars, internal-controls and expense policies, KPI reports (gross margin, burn rate, DSO), tax-season preparation lists (recommends a licensed CPA for filings)",
         color: "#f2d05a",
       },
       {
         name: "Legal",
         role: "Legal Advisor",
         skills:
-          "contract and policy hygiene: contract review with risk flags, NDAs, terms of service and privacy policy drafts, compliance checklists, vendor agreement comparisons (always recommends licensed counsel for final review)",
+          "small-business contracts and compliance per contract-lifecycle-management practice: plain-English contract drafts and templates (MSAs, NDAs, SOWs, vendor and client agreements), redline reviews flagging risk-allocation clauses (indemnification, limitation of liability, IP ownership, termination, auto-renewal), contract summaries and obligation trackers, compliance checklists (entity filings, licenses, privacy policies, terms of service), negotiation playbooks with fallback positions, risk memos in business terms (not a licensed attorney — always recommends counsel for final review)",
         color: "#a685e2",
       },
     ],
@@ -502,42 +502,42 @@ export const TEMPLATES: TeamTemplate[] = [
         name: "Manager",
         role: "Engineering Manager",
         skills:
-          "breaking projects into tasks, delegating work to the right teammate, tracking the kanban board, unblocking the team, status reports, prioritization",
+          "engineering leadership per DORA/SPACE practice: breaking projects into tasks, delegating work to the best-suited teammate, tracking the kanban board and unblocking the team, sprint and quarterly roadmap plans with capacity and dependency mapping, delivery dashboards tracking deployment frequency, lead time, change-failure rate and MTTR, RFC and design-review facilitation, hiring loops with structured interview rubrics, blameless incident postmortems, AI-assisted development adoption plans, status reports, prioritization and headcount cases",
         color: "#6c8cff",
       },
       {
         name: "Architect",
         role: "Software Architect",
         skills:
-          "system architecture, tech stack decisions, API design, data modeling, design reviews, technical documentation, scalability planning",
+          "architecture design per iSAQB CPSA and TOGAF practice: ADRs capturing context, options and trade-off rationale, C4 model diagrams (context/container/component), domain-driven design with bounded contexts, API-first contracts via OpenAPI/AsyncAPI with versioning strategy, data modeling, microservice and event-driven patterns (saga, outbox, CQRS), cloud reference architectures, quality-attribute scenarios and trade-off reviews, threat modeling per STRIDE/OWASP, build-vs-buy assessments, scalability planning and technical documentation",
         color: "#a685e2",
       },
       {
         name: "Backend",
         role: "Backend Engineer",
         skills:
-          "server-side development, REST/GraphQL APIs, databases and queries, business logic, third-party integrations, performance tuning",
+          "backend delivery per twelve-factor and OWASP Top 10 practice: REST/GraphQL API design with OpenAPI specs, pagination, idempotency and versioned error contracts, SQL/NoSQL schema design with indexing and zero-downtime migrations, business logic and third-party integrations, message queues with retry/backoff patterns, OAuth2/OIDC authentication and secure coding, observability with structured logs, traces and metrics, caching strategy and performance profiling, load tests and capacity plans, AI-service integration with safe model-response handling",
         color: "#5fd4a2",
       },
       {
         name: "Frontend",
         role: "Frontend Engineer",
         skills:
-          "UI development, React, HTML/CSS, responsive design, accessibility, state management, UX polish and interaction details",
+          "frontend engineering per WCAG 2.2 AA and Core Web Vitals practice: accessible React/TypeScript components with semantic HTML, ARIA and keyboard flows, performance budgets targeting LCP/INP/CLS with code-splitting and image strategy, design-system contributions with tokens and component API docs, state and data-fetching patterns, test pyramid with unit, e2e and visual regression coverage, SSR/SSG rendering strategy, responsive i18n-ready layouts, frontend security (CSP, XSS defense) per OWASP, Lighthouse audits with remediation plans, UX polish and interaction details",
         color: "#f2a65a",
       },
       {
         name: "Systems",
         role: "Systems & DevOps Engineer",
         skills:
-          "infrastructure, deployment pipelines, CI/CD, shell scripting and automation, monitoring, backups, security hardening",
+          "platform engineering per Google SRE and DORA practice: infrastructure as code with Terraform modules and drift detection, Kubernetes deployment with autoscaling and network policies, CI/CD pipelines with progressive delivery and rollback, SLOs with error budgets and burn-rate alerting, observability stacks (metrics, traces, dashboards), shell scripting and automation, incident runbooks and blameless postmortems, secrets management and supply-chain security (SBOM, image signing), backups and disaster-recovery plans with RTO/RPO targets, cost-optimization reports, golden-path developer docs",
         color: "#4cc3d9",
       },
       {
         name: "QA",
         role: "QA Engineer",
         skills:
-          "test plans, writing and running tests, code review, bug hunting and reproduction, regression checks, verifying finished work and moving reviewed tasks to done",
+          "quality engineering per ISTQB CTFL v4 practice: risk-based test plans with coverage matrices and entry/exit criteria, test-pyramid automation (unit, API, e2e and contract tests), shift-left review of requirements with Gherkin/BDD acceptance criteria, CI-integrated suites with flake triage, exploratory testing charters, defect reports with repro steps and severity ranking, regression checks, performance and accessibility passes, AI-feature validation (LLM output checks per ISTQB CT-AI), code review, verifying teammates' finished work and moving reviewed tasks to done",
         color: "#e0637c",
       },
     ],
