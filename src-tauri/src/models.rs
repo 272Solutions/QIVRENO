@@ -234,6 +234,11 @@ pub struct Settings {
     /// One-time pairing code shown in Settings; a chat pairs by sending it.
     #[serde(default)]
     pub telegram_pair_code: String,
+    /// Absolute paths to folders on the user's computer that the operator has
+    /// explicitly connected. Agents may read and (when asked) edit files in
+    /// these folders, alongside the built-in Shared folder.
+    #[serde(default)]
+    pub connected_folders: Vec<String>,
 }
 
 pub fn default_imap_port() -> u16 {
@@ -290,6 +295,7 @@ impl Default for Settings {
             telegram_token: String::new(),
             telegram_chat_id: 0,
             telegram_pair_code: String::new(),
+            connected_folders: Vec::new(),
         }
     }
 }

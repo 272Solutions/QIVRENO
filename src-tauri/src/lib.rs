@@ -53,6 +53,7 @@ fn migrate_legacy_data(data_dir: &std::path::Path) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             migrate_legacy_data(&data_dir);
@@ -96,6 +97,11 @@ pub fn run() {
             commands::builtin_enable,
             commands::builtin_disable,
             commands::list_shared_files,
+            commands::create_shared_folder,
+            commands::list_connected_folders,
+            commands::pick_folder,
+            commands::connect_folder,
+            commands::disconnect_folder,
             commands::read_shared_file,
             commands::write_shared_file,
             commands::delete_shared_file,

@@ -35,46 +35,155 @@ pub fn get_snapshot(state: State<'_, AppState>) -> Snapshot {
 
 #[derive(Serialize)]
 pub struct SharedFile {
+    /// Path relative to the Shared root, using "/" separators (e.g.
+    /// "Invoices/March.md"). Bare filename for files at the root.
     pub name: String,
     pub size: u64,
     pub modified: u64,
+    /// True for a directory entry (agents and the operator can open it).
+    #[serde(default)]
+    pub is_dir: bool,
 }
 
+/// Resolve a Shared-relative path safely (no escaping the Shared root).
 fn shared_path(state: &AppState, name: &str) -> Result<std::path::PathBuf, String> {
-    let name = name.trim().trim_start_matches('/');
-    if name.is_empty() || name.contains("..") {
+    let name = name.trim().replace('\\', "/");
+    let name = name.trim_start_matches('/');
+    if name.is_empty() {
+        return Err("invalid file name".into());
+    }
+    // Reject any ".." segment so a crafted name can't escape the Shared root.
+    if name.split('/').any(|seg| seg == ".." || seg == ".") {
         return Err("invalid file name".into());
     }
     Ok(state.shared_dir().join(name))
 }
 
+fn modified_ms(meta: &std::fs::Metadata) -> u64 {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Walk the Shared tree, returning every file and folder as a root-relative
+/// path so the Files view can render a real folder hierarchy.
+fn walk_shared(root: &std::path::Path, rel: &str, out: &mut Vec<SharedFile>) {
+    let dir = if rel.is_empty() { root.to_path_buf() } else { root.join(rel) };
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for entry in entries.flatten() {
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        // Hidden files and export/temp artifacts stay out of the list.
+        if file_name.starts_with('.') || file_name.ends_with(".part") {
+            continue;
+        }
+        let child_rel = if rel.is_empty() { file_name.clone() } else { format!("{rel}/{file_name}") };
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_dir() {
+            out.push(SharedFile { name: child_rel.clone(), size: 0, modified: modified_ms(&meta), is_dir: true });
+            walk_shared(root, &child_rel, out);
+        } else if meta.is_file() {
+            out.push(SharedFile { name: child_rel, size: meta.len(), modified: modified_ms(&meta), is_dir: false });
+        }
+    }
+}
+
 #[tauri::command]
 pub fn list_shared_files(state: State<'_, AppState>) -> Vec<SharedFile> {
-    let mut files: Vec<SharedFile> = std::fs::read_dir(state.shared_dir())
-        .map(|entries| {
-            entries
-                .flatten()
-                .filter(|e| e.path().is_file())
-                .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
-                .filter_map(|e| {
-                    let meta = e.metadata().ok()?;
-                    let modified = meta
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0);
-                    Some(SharedFile {
-                        name: e.file_name().to_string_lossy().into_owned(),
-                        size: meta.len(),
-                        modified,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let root = state.shared_dir();
+    let mut files = Vec::new();
+    walk_shared(&root, "", &mut files);
     files.sort_by(|a, b| b.modified.cmp(&a.modified));
     files
+}
+
+/// Create a subfolder inside Shared (e.g. "Invoices" or "Clients/Acme").
+#[tauri::command]
+pub fn create_shared_folder(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    let path = shared_path(&state, &name)?;
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+pub struct ConnectedFolder {
+    pub path: String,
+    pub name: String,
+    /// False if the folder no longer exists on disk.
+    pub exists: bool,
+}
+
+#[tauri::command]
+pub fn list_connected_folders(state: State<'_, AppState>) -> Vec<ConnectedFolder> {
+    let settings = state.settings.lock().unwrap();
+    settings
+        .connected_folders
+        .iter()
+        .map(|p| {
+            let path = std::path::Path::new(p);
+            ConnectedFolder {
+                path: p.clone(),
+                name: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| p.clone()),
+                exists: path.is_dir(),
+            }
+        })
+        .collect()
+}
+
+/// Open the OS folder picker and return the chosen path (None if cancelled).
+/// The operator connects it in a second, confirmed step.
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog().file().pick_folder(move |folder| {
+        let _ = tx.send(folder.and_then(|f| f.into_path().ok()));
+    });
+    tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten())
+        .await
+        .ok()
+        .flatten()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Connect an existing folder on the user's computer so agents can read and
+/// (when asked) edit its files. The operator confirms this in the UI first.
+#[tauri::command]
+pub fn connect_folder(app: AppHandle, path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    let p = std::path::Path::new(trimmed);
+    if !p.is_dir() {
+        return Err("that folder doesn't exist".into());
+    }
+    // Keep the path as the OS picker returned it (already absolute and clean).
+    // Avoid std::fs::canonicalize here: on Windows it yields an unfriendly
+    // \\?\ verbatim path that would show in the UI and agent prompts.
+    let folder = trimmed.to_string();
+    let state = app.state::<AppState>();
+    {
+        let mut settings = state.settings.lock().unwrap();
+        if !settings.connected_folders.iter().any(|f| f == &folder) {
+            settings.connected_folders.push(folder);
+        }
+    }
+    state.save_settings();
+    runtime::emit_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn disconnect_folder(app: AppHandle, path: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    {
+        let mut settings = state.settings.lock().unwrap();
+        settings.connected_folders.retain(|f| f != &path);
+    }
+    state.save_settings();
+    runtime::emit_changed(&app);
+    Ok(())
 }
 
 #[tauri::command]

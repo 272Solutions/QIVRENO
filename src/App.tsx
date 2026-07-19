@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import {
   Agent, AGENT_COLORS, agentTemplateGroups, Availability, BackendKind,
-  BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, Doc, fileKind,
-  LicenseStatus, MAX_AGENTS, Permission, Settings, SharedFile, Snapshot,
-  Task, TeamTemplate, TEMPLATES,
+  BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, ConnectedFolder,
+  displayName, Doc, fileKind, LicenseStatus, MAX_AGENTS, Permission, Settings,
+  SharedFile, Snapshot, Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
 
@@ -65,6 +65,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
     trial_started_at: 0, qivvy_seeded: false,
     mail_enabled: false, mail_host: "", mail_port: 993, mail_user: "", mail_password: "", mail_allowlist: "",
     telegram_enabled: false, telegram_token: "", telegram_chat_id: 0, telegram_pair_code: "",
+    connected_folders: [],
   },
   license: { state: "trial", days_left: 14, plan: "trial", customer: "", expires_at: 0, active: true },
 };
@@ -414,6 +415,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [getStarted, setGetStarted] = useState<(typeof GET_STARTED)[number] | null>(null);
+  const [showGetStarted, setShowGetStarted] = useState(false);
   const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
   const [theme, setTheme] = useState<"dark" | "light" | "system">(
@@ -601,14 +603,9 @@ export default function App() {
             ✨ Quick Start Team
           </button>
         )}
-        <div className="section-label"><span>Get Started</span></div>
-        <div className="get-started">
-          {GET_STARTED.map((g) => (
-            <button key={g.label} className="gs-item" title={g.desc} onClick={() => setGetStarted(g)}>
-              <span className="gs-icon">{g.icon}</span> {g.label}
-            </button>
-          ))}
-        </div>
+        <button className="add-agent getstarted" onClick={() => setShowGetStarted(true)}>
+          🚀 Get Started
+        </button>
         <div className="sidebar-footer">
           <div className="backend-dots">
             {BACKENDS.map((b) => (
@@ -690,6 +687,34 @@ export default function App() {
             <SetupGuide backend={showGuide} avail={avail} onRecheck={checkAvail} />
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => setShowGuide(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showGetStarted && (
+        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGetStarted(false); }}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <h2>🚀 Get Started</h2>
+            <p className="hint" style={{ margin: "8px 0 14px" }}>
+              Pick a ready-made job and the team builds it for you — the finished document lands in Files.
+            </p>
+            <div className="gs-picker">
+              {GET_STARTED.map((g) => (
+                <button
+                  key={g.label}
+                  className="gs-pick"
+                  onClick={() => { setShowGetStarted(false); setGetStarted(g); }}
+                >
+                  <span className="gs-pick-icon">{g.icon}</span>
+                  <span className="gs-pick-text">
+                    <span className="gs-pick-title">{g.label}</span>
+                    <span className="gs-pick-desc">{g.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setShowGetStarted(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -1053,7 +1078,11 @@ function KanbanBoard(props: {
                           </div>
                         )}
                         {t.column === "requires_input" && t.input_request && (
-                          <InputRequestBox task={t} notify={notify} />
+                          <div className="kcard-needs">
+                            <div className="kcard-needs-tag">❓ Needs your input</div>
+                            <div className="kcard-needs-q">{t.input_request}</div>
+                            <div className="kcard-needs-cta">Open to respond →</div>
+                          </div>
                         )}
                         {t.status === "done" && t.result && (
                           <div className="kcard-snippet">{t.result.replace(/[#*`>-]/g, "").slice(0, 110)}</div>
@@ -1090,8 +1119,13 @@ function KanbanBoard(props: {
   );
 }
 
-/** Inline question + answer box on a Requires Input card. */
-function InputRequestBox(props: { task: Task; notify: (t: string, e?: boolean) => void }) {
+/** Question + large answer field, shown at the top of the task detail modal
+ * when the agent has paused for the operator's input. */
+function InputRequestBox(props: {
+  task: Task;
+  notify: (t: string, e?: boolean) => void;
+  onAnswered?: () => void;
+}) {
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
@@ -1100,28 +1134,32 @@ function InputRequestBox(props: { task: Task; notify: (t: string, e?: boolean) =
     try {
       await invoke("provide_input", { id: props.task.id, answer });
       props.notify("Answer sent — task resuming");
+      props.onAnswered?.();
     } catch (e) {
       props.notify(String(e), true);
       setBusy(false);
     }
   };
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ margin: "6px 0" }}>
-      <div className="kcard-snippet" style={{ whiteSpace: "pre-wrap", color: "var(--text)" }}>
-        ❓ {props.task.input_request}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-        <input
-          type="text"
-          style={{ flex: 1, minWidth: 0 }}
-          placeholder="Type your answer…"
-          value={answer}
-          disabled={busy}
-          onChange={(e) => setAnswer(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-        />
-        <button className="btn sm" disabled={busy || !answer.trim()} onClick={submit}>
-          {busy ? "…" : "Answer"}
+    <div className="input-request">
+      <div className="input-request-head">❓ The agent needs your input to continue</div>
+      <div className="input-request-q">{props.task.input_request}</div>
+      <textarea
+        className="input-request-field"
+        autoFocus
+        rows={6}
+        placeholder="Type your response for the agent…"
+        value={answer}
+        disabled={busy}
+        onChange={(e) => setAnswer(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+        }}
+      />
+      <div className="input-request-actions">
+        <span className="hint">{MOD_ENTER} to send</span>
+        <button className="btn" disabled={busy || !answer.trim()} onClick={submit}>
+          {busy ? "Sending…" : "Send response"}
         </button>
       </div>
     </div>
@@ -1192,6 +1230,9 @@ function TaskDetailModal(props: {
             ` · took ${fmtDuration(task.updated_at - task.created_at)}`}
         </div>
         <div className="task-detail" style={{ borderTop: "none", paddingTop: 4 }}>
+          {task.column === "requires_input" && task.input_request && (
+            <InputRequestBox task={task} notify={notify} onAnswered={props.onClose} />
+          )}
           {task.result && (
             <div>
               <h4>{task.status === "failed" ? "Error" : "Summary — what the agent reports"}</h4>
@@ -1210,8 +1251,8 @@ function TaskDetailModal(props: {
               <h4>Files produced</h4>
               <div className="file-chips">
                 {files.map((f) => (
-                  <button key={f} className="file-chip" onClick={() => { props.onOpenFile(f); props.onClose(); }}>
-                    📄 {f} <span>open →</span>
+                  <button key={f} className="file-chip" onClick={() => { props.onOpenFile(f); props.onClose(); }} title={f}>
+                    📄 {displayName(f)} <span>open →</span>
                   </button>
                 ))}
               </div>
@@ -1867,15 +1908,20 @@ function FilesView(props: {
 }) {
   const { notify } = props;
   const [files, setFiles] = useState<SharedFile[]>([]);
+  const [folders, setFolders] = useState<ConnectedFolder[]>([]);
+  const [cwd, setCwd] = useState("");           // current subfolder within Shared ("" = root)
   const [selName, setSelName] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
   const [naming, setNaming] = useState<{ tpl: (typeof NEW_FILE_TEMPLATES)[number]; title: string; brief: string } | null>(null);
+  const [newFolder, setNewFolder] = useState<string | null>(null);  // null = closed, "" = open
+  const [connectPath, setConnectPath] = useState<string | null>(null);  // pending connect confirmation
 
   const refresh = useCallback(() => {
     invoke<SharedFile[]>("list_shared_files").then(setFiles).catch(() => {});
+    invoke<ConnectedFolder[]>("list_connected_folders").then(setFolders).catch(() => {});
   }, []);
   useEffect(() => {
     refresh();
@@ -1883,8 +1929,52 @@ function FilesView(props: {
     return () => clearInterval(iv);
   }, [refresh]);
 
+  const createFolder = async (name: string) => {
+    const clean = name.trim().replace(/[\\:]/g, "-").replace(/^\.+/, "");
+    if (!clean) return;
+    const rel = cwd ? `${cwd}/${clean}` : clean;
+    try {
+      await invoke("create_shared_folder", { name: rel });
+      refresh();
+    } catch (e) {
+      notify(String(e), true);
+    }
+  };
+
+  const pickAndConnect = async () => {
+    try {
+      const path = await invoke<string | null>("pick_folder");
+      if (path) setConnectPath(path);
+    } catch (e) {
+      notify(String(e), true);
+    }
+  };
+
+  const confirmConnect = async () => {
+    if (!connectPath) return;
+    try {
+      await invoke("connect_folder", { path: connectPath });
+      setConnectPath(null);
+      refresh();
+      notify("Folder connected — your team can now work in it");
+    } catch (e) {
+      notify(String(e), true);
+    }
+  };
+
+  const disconnectFolder = async (path: string) => {
+    try {
+      await invoke("disconnect_folder", { path });
+      refresh();
+    } catch (e) {
+      notify(String(e), true);
+    }
+  };
+
   useEffect(() => {
     if (props.focus) {
+      const slash = props.focus.lastIndexOf("/");
+      setCwd(slash >= 0 ? props.focus.slice(0, slash) : "");
       openFile(props.focus);
       props.onFocusConsumed?.();
     }
@@ -1922,7 +2012,7 @@ function FilesView(props: {
   /** Dispatch the content brief to the team; the file lands here when done. */
   const buildFile = async (tpl: (typeof NEW_FILE_TEMPLATES)[number], title: string, brief: string) => {
     const base = title.trim().replace(/[/\\:]/g, "-").replace(/^\.+/, "") || "Untitled";
-    const name = base + tpl.ext;
+    const name = (cwd ? `${cwd}/` : "") + base + tpl.ext;
     const kindLabel = KIND_META[tpl.kind].label.toLowerCase();
     try {
       await invoke("create_task", {
@@ -1941,10 +2031,11 @@ function FilesView(props: {
 
   const createFile = async (tpl: (typeof NEW_FILE_TEMPLATES)[number], title: string) => {
     const base = title.trim().replace(/[/\\:]/g, "-").replace(/^\.+/, "") || "Untitled";
-    let name = base + tpl.ext;
+    const dir = cwd ? `${cwd}/` : "";
+    let name = dir + base + tpl.ext;
     let n = 2;
     while (files.some((f) => f.name === name)) {
-      name = `${base} ${n}${tpl.ext}`;
+      name = `${dir}${base} ${n}${tpl.ext}`;
       n++;
     }
     const content = tpl.make(base);
@@ -2009,7 +2100,27 @@ function FilesView(props: {
                 {KIND_META[t.kind].icon}<span>{KIND_META[t.kind].label}</span>
               </button>
             ))}
+            <button className="file-new" title="New folder" onClick={() => setNewFolder("")}>
+              📁<span>Folder</span>
+            </button>
           </div>
+          {newFolder !== null && (
+            <div className="folder-new-row">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Folder name…"
+                value={newFolder}
+                onChange={(e) => setNewFolder(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newFolder.trim()) { createFolder(newFolder); setNewFolder(null); }
+                  if (e.key === "Escape") setNewFolder(null);
+                }}
+              />
+              <button className="btn sm" disabled={!newFolder.trim()} onClick={() => { createFolder(newFolder); setNewFolder(null); }}>Create</button>
+              <button className="btn ghost sm" onClick={() => setNewFolder(null)}>✕</button>
+            </div>
+          )}
           {files.length > 0 && (
             <input
               className="file-search"
@@ -2019,14 +2130,39 @@ function FilesView(props: {
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
-          {files.length === 0 && (
-            <div className="lib-empty">
-              Nothing yet. Try dispatching: “Create a one-page overview of our services as Shared/Overview.md”.
+          {/* Breadcrumb when inside a subfolder */}
+          {cwd && !query.trim() && (
+            <div className="file-crumbs">
+              <button className="crumb" onClick={() => setCwd("")}>Shared</button>
+              {cwd.split("/").map((seg, i, arr) => (
+                <span key={i}>
+                  <span className="crumb-sep">/</span>
+                  <button className="crumb" onClick={() => setCwd(arr.slice(0, i + 1).join("/"))}>{seg}</button>
+                </span>
+              ))}
             </div>
           )}
           {(() => {
             const q = query.trim().toLowerCase();
-            const shown = files.filter((f) => !q || f.name.toLowerCase().includes(q));
+            // Searching flattens the whole tree; otherwise show only this folder's direct children.
+            const inCwd = (f: SharedFile) => {
+              if (q) return true;
+              const rest = cwd ? (f.name.startsWith(cwd + "/") ? f.name.slice(cwd.length + 1) : null) : f.name;
+              return rest !== null && !rest.includes("/");
+            };
+            const shown = files.filter((f) => inCwd(f) && (!q || f.name.toLowerCase().includes(q)));
+            if (files.length === 0) {
+              return (
+                <div className="lib-empty">
+                  Nothing yet. Drop files in with <b>Connect a folder</b> below, create one above, or ask an agent to produce one.
+                </div>
+              );
+            }
+            if (shown.length === 0) {
+              return <div className="lib-empty">{q ? <>No files match “{query}”.</> : <>This folder is empty.</>}</div>;
+            }
+            const subFolders = shown.filter((f) => f.is_dir).sort((a, b) => a.name.localeCompare(b.name));
+            const docs = shown.filter((f) => !f.is_dir);
             const order: { kind: string; label: string }[] = [
               { kind: "document", label: "Documents" },
               { kind: "spreadsheet", label: "Spreadsheets" },
@@ -2034,42 +2170,78 @@ function FilesView(props: {
               { kind: "dashboard", label: "Dashboards" },
               { kind: "other", label: "Other files" },
             ];
-            if (shown.length === 0) return <div className="lib-empty">No files match “{query}”.</div>;
-            return order.map((grp) => {
-              const inGroup = shown
-                .filter((f) => fileKind(f.name) === grp.kind)
-                .sort((a, b) => b.modified - a.modified);
-              if (inGroup.length === 0) return null;
-              return (
-                <div key={grp.kind}>
-                  <div className="section-label"><span>{grp.label}</span><span>{inGroup.length}</span></div>
-                  {inGroup.map((f) => (
-                    <button
-                      key={f.name}
-                      className={`lib-item ${selName === f.name ? "active" : ""}`}
-                      onClick={() => openFile(f.name)}
-                    >
-                      <span className="lib-item-title">{KIND_META[fileKind(f.name)].icon} {f.name}</span>
-                      <span className="lib-item-sub">{timeAgo(f.modified)}</span>
-                    </button>
-                  ))}
-                </div>
-              );
-            });
+            return (
+              <>
+                {subFolders.length > 0 && (
+                  <div>
+                    <div className="section-label"><span>Folders</span><span>{subFolders.length}</span></div>
+                    {subFolders.map((f) => (
+                      <button key={f.name} className="lib-item folder-item" onClick={() => { setCwd(f.name); setQuery(""); }}>
+                        <span className="lib-item-title">📁 {displayName(f.name)}</span>
+                        <span className="lib-item-sub">open →</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {order.map((grp) => {
+                  const inGroup = docs
+                    .filter((f) => fileKind(f.name) === grp.kind)
+                    .sort((a, b) => b.modified - a.modified);
+                  if (inGroup.length === 0) return null;
+                  return (
+                    <div key={grp.kind}>
+                      <div className="section-label"><span>{grp.label}</span><span>{inGroup.length}</span></div>
+                      {inGroup.map((f) => (
+                        <button
+                          key={f.name}
+                          className={`lib-item ${selName === f.name ? "active" : ""}`}
+                          onClick={() => openFile(f.name)}
+                          title={f.name}
+                        >
+                          <span className="lib-item-title">{KIND_META[fileKind(f.name)].icon} {displayName(f.name)}</span>
+                          <span className="lib-item-sub">{timeAgo(f.modified)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
+            );
           })()}
+
+          {/* Connected folders on the user's computer */}
+          <div className="section-label" style={{ marginTop: 14 }}>
+            <span>Your Folders</span>
+            <button className="link-btn" onClick={pickAndConnect}>+ Connect</button>
+          </div>
+          {folders.length === 0 ? (
+            <div className="lib-empty small">
+              Connect a folder on your computer so the team can work on files already on your machine.
+            </div>
+          ) : (
+            folders.map((f) => (
+              <div key={f.path} className={`lib-item connected ${f.exists ? "" : "missing"}`}>
+                <span className="lib-item-title" title={f.path}>💻 {f.name}{f.exists ? "" : " (missing)"}</span>
+                <span className="conn-actions">
+                  <button className="link-btn" title="Open in file manager" onClick={() => openPath(f.path).catch(() => {})}>open</button>
+                  <button className="link-btn danger" title="Disconnect" onClick={() => disconnectFolder(f.path)}>✕</button>
+                </span>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="lib-editor">
           {!selName ? (
             <div className="empty">
               Select a file, create one, or ask an agent to produce one.<br />
-              Documents (.md), spreadsheets (.csv), presentations (.slides.json) and dashboards
-              (.dash.json) all render right here and export with one click.
+              Documents, spreadsheets, presentations and dashboards all render right here
+              and export to Word, Excel, PowerPoint or PDF with one click.
             </div>
           ) : (
             <>
               <div className="file-head">
-                <span className="file-name">{meta.icon} {selName}</span>
+                <span className="file-name" title={selName}>{meta.icon} {displayName(selName)}</span>
                 <div className="spacer" />
                 <button className={`btn ghost sm ${!editing ? "seg-active" : ""}`} onClick={() => setEditing(false)}>View</button>
                 <button className={`btn ghost sm ${editing ? "seg-active" : ""}`} onClick={() => setEditing(true)}>Edit</button>
@@ -2153,6 +2325,26 @@ function FilesView(props: {
               >
                 Ask the team {MOD_ENTER}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {connectPath && (
+        <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConnectPath(null); }}>
+          <div className="modal" style={{ maxWidth: 460 }}>
+            <h2>⚠️ Connect this folder?</h2>
+            <p className="hint" style={{ margin: "10px 0" }}>
+              You're about to give your AI team access to:
+            </p>
+            <div className="connect-path">{connectPath}</div>
+            <p className="hint" style={{ margin: "12px 0" }}>
+              Agents will be able to <b>read every file</b> in this folder, and <b>create or edit
+              files</b> here when a task asks them to. Only connect folders you're comfortable letting
+              the team work in. You can disconnect it any time.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setConnectPath(null)}>Cancel</button>
+              <button className="btn" onClick={confirmConnect}>Connect folder</button>
             </div>
           </div>
         </div>

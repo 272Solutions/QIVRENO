@@ -819,6 +819,18 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
         ws = workspace.display(),
         sh = shared.display(),
     );
+    // Folders on the operator's computer they've connected for the team to
+    // work in. Only CLI-backed agents (Claude/Codex) can reach these; note
+    // them so those agents know the real paths exist.
+    let connected = &settings.connected_folders;
+    if !connected.is_empty() {
+        p.push_str(
+            "The operator has connected these folders on their computer for you to read and, when asked, edit:\n",
+        );
+        for folder in connected {
+            p.push_str(&format!("  - {folder}\n"));
+        }
+    }
     // Local models don't know the current date; state it so scheduling,
     // deadlines and calendar events use the real year.
     let today = crate::calendar::today_string();
@@ -1096,8 +1108,12 @@ fn run_claude(
             cmd.arg("--allowedTools").arg(
                 "Bash(curl:*),Read,Write,Edit,MultiEdit,Glob,Grep,LS,WebFetch,WebSearch,TodoWrite,NotebookEdit",
             );
-            // Grant the shared team folder alongside the private workspace.
+            // Grant the shared team folder alongside the private workspace,
+            // plus any folders on the computer the operator has connected.
             cmd.arg("--add-dir").arg(state.shared_dir());
+            for folder in &settings.connected_folders {
+                cmd.arg("--add-dir").arg(folder);
+            }
         }
     }
     let (code, out, err) = run_child(app, task_id, cmd, Some(prompt.to_string()))?;
@@ -1141,10 +1157,13 @@ fn run_codex(
         }
         Permission::Sandboxed => {
             cmd.arg("--sandbox").arg("workspace-write");
-            cmd.arg("-c").arg(format!(
-                "sandbox_workspace_write.writable_roots=[\"{}\"]",
-                state.shared_dir().display()
-            ));
+            // Shared folder plus operator-connected folders become writable
+            // roots (JSON-escaped so Windows backslashes survive).
+            let mut roots: Vec<String> = vec![state.shared_dir().to_string_lossy().into_owned()];
+            roots.extend(settings.connected_folders.iter().cloned());
+            let roots_json = serde_json::to_string(&roots).unwrap_or_else(|_| "[]".into());
+            cmd.arg("-c")
+                .arg(format!("sandbox_workspace_write.writable_roots={roots_json}"));
         }
     }
     cmd.arg(prompt);

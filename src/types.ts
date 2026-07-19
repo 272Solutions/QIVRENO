@@ -79,12 +79,21 @@ export interface Settings {
   telegram_token: string;
   telegram_chat_id: number;
   telegram_pair_code: string;
+  connected_folders: string[];
 }
 
 export interface SharedFile {
+  /** Path relative to the Shared root ("/" separators); bare name at root. */
   name: string;
   size: number;
   modified: number;
+  is_dir?: boolean;
+}
+
+export interface ConnectedFolder {
+  path: string;
+  name: string;
+  exists: boolean;
 }
 
 export type FileKind = "document" | "spreadsheet" | "presentation" | "dashboard" | "other";
@@ -96,6 +105,18 @@ export function fileKind(name: string): FileKind {
   if (n.endsWith(".csv")) return "spreadsheet";
   if (n.endsWith(".md") || n.endsWith(".txt")) return "document";
   return "other";
+}
+
+/** Human-facing file name: drop the folder path and the technical extension
+ * (.md, .csv, .slides.json, .dash.json, .txt) so users see "Q3 Budget", not
+ * "Clients/Q3 Budget.csv". Unknown extensions are kept so nothing looks lost. */
+export function displayName(name: string): string {
+  const base = name.split("/").pop() ?? name;
+  const lower = base.toLowerCase();
+  for (const ext of [".slides.json", ".dash.json", ".md", ".csv", ".txt"]) {
+    if (lower.endsWith(ext)) return base.slice(0, base.length - ext.length);
+  }
+  return base;
 }
 
 export interface BuiltinStatus {
