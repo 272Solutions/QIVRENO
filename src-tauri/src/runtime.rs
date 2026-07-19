@@ -191,10 +191,16 @@ pub fn create_subtask(
     )?;
     {
         let state = app.state::<AppState>();
-        let mut tasks = state.tasks.lock().unwrap();
-        if let Some(t) = tasks.iter_mut().find(|t| t.id == task.id) {
-            t.parent_id = parent_id.to_string();
-            t.log.push(format!("subtask of '{parent_title}' created by {}", creator.name));
+        {
+            // Scope the guard so it is released before save_tasks(), which
+            // re-locks tasks internally — holding it across the call would
+            // deadlock this thread (and every other, via the poisoned wait)
+            // on the non-reentrant mutex.
+            let mut tasks = state.tasks.lock().unwrap();
+            if let Some(t) = tasks.iter_mut().find(|t| t.id == task.id) {
+                t.parent_id = parent_id.to_string();
+                t.log.push(format!("subtask of '{parent_title}' created by {}", creator.name));
+            }
         }
         state.save_tasks();
     }
