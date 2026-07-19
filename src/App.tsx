@@ -418,7 +418,9 @@ export default function App() {
   const [showGetStarted, setShowGetStarted] = useState(false);
   const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
-  const [theme, setTheme] = useState<"dark" | "light" | "system">(
+  // Theme still applies from the OS (or a previously saved preference); the
+  // in-app toggle was removed, so there's no setter.
+  const [theme] = useState<"dark" | "light" | "system">(
     () => (localStorage.getItem("qiv_theme") as "dark" | "light" | "system") || "system",
   );
 
@@ -544,9 +546,6 @@ export default function App() {
       ? `Free trial: ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} left.`
       : null;
 
-  const cycleTheme = () =>
-    setTheme((t) => (t === "system" ? "light" : t === "light" ? "dark" : "system"));
-  const themeIcon = theme === "light" ? "☀️" : theme === "dark" ? "🌙" : "🖥️";
 
   return (
     <div className="app-col">
@@ -624,9 +623,6 @@ export default function App() {
 
       <main className="main">
         <div className="app-toolbar">
-          <button className="header-btn" title={`Theme: ${theme} (click to change)`} onClick={cycleTheme}>
-            {themeIcon}<span className="lbl">{theme[0].toUpperCase() + theme.slice(1)}</span>
-          </button>
           <button className="header-btn" title="Settings" onClick={() => setShowSettings(true)}>
             ⚙<span className="lbl">Settings</span>
           </button>
