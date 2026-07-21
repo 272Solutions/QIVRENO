@@ -127,6 +127,7 @@ export interface BuiltinStatus {
   downloaded: number;
   total: number;
   model_name: string;
+  model_id: string;
   model_size_gb: number;
   model_installed: boolean;
   ram_gb: number;

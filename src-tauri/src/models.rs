@@ -176,6 +176,10 @@ pub struct Settings {
     pub builtin_enabled: bool,
     #[serde(default = "default_builtin_port")]
     pub builtin_port: u16,
+    /// Which model the Built-in engine runs: "" = stock Qwen3 sized to RAM,
+    /// "qivreno-agent-4b" = the Qivreno-tuned model.
+    #[serde(default)]
+    pub builtin_model: String,
     /// Whether the one-time "Claude/Codex primary, local fallback" advice
     /// dialog has been dismissed.
     #[serde(default)]
@@ -273,6 +277,7 @@ impl Default for Settings {
             max_hops: 6,
             router_model: String::new(),
             builtin_enabled: false,
+            builtin_model: String::new(),
             builtin_port: default_builtin_port(),
             backend_advice_shown: false,
             brand_accent: String::new(),

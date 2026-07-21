@@ -364,6 +364,32 @@ pub async fn builtin_enable(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Switch the Built-in engine's model ("" = stock auto, "qivreno-agent-4b" =
+/// the tuned model). If the engine is on, restart it — ensure_started
+/// downloads the new model first if it isn't installed yet.
+#[tauri::command]
+pub fn set_builtin_model(app: AppHandle, model_id: String) -> Result<(), String> {
+    if !matches!(model_id.as_str(), "" | "qivreno-agent-4b") {
+        return Err(format!("unknown builtin model: {model_id}"));
+    }
+    let state = app.state::<AppState>();
+    let enabled = {
+        let mut settings = state.settings.lock().unwrap();
+        if settings.builtin_model == model_id {
+            return Ok(());
+        }
+        settings.builtin_model = model_id;
+        settings.builtin_enabled
+    };
+    state.save_settings();
+    if enabled {
+        crate::builtin::stop(&app);
+        crate::builtin::ensure_started(&app);
+    }
+    runtime::emit_changed(&app);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn builtin_disable(app: AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();

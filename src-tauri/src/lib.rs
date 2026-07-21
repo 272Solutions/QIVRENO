@@ -94,6 +94,7 @@ pub fn run() {
             commands::set_agent_enabled,
             commands::test_mail_connection,
             commands::builtin_status,
+            commands::set_builtin_model,
             commands::builtin_enable,
             commands::builtin_disable,
             commands::list_shared_files,

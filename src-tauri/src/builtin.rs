@@ -51,6 +51,16 @@ const MODEL_4B: ModelSpec = ModelSpec {
     url: "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
     size_gb: 2.6,
 };
+/// Qivreno's own fine-tune of Qwen3-4B: trained on agent-work behaviors
+/// (tool discipline, decomposition, ask-vs-assume, reports, injection
+/// resistance); scores 13/13 vs stock's 8/13 on the behavioral eval suite.
+/// Q5_K_M because Q4 quantization destroys the fine-tuned deltas.
+const MODEL_QIVRENO_4B: ModelSpec = ModelSpec {
+    name: "Qivreno Tuned 4B",
+    file: "qivreno-agent-4b-v1-Q5_K_M.gguf",
+    url: "https://get.qivreno.ai/models/qivreno-agent-4b-v1-Q5_K_M.gguf",
+    size_gb: 2.7,
+};
 
 pub fn ram_gb() -> u64 {
     crate::platform::ram_gb()
@@ -65,6 +75,15 @@ pub fn recommended_model() -> &'static ModelSpec {
     }
 }
 
+/// The model the Built-in engine should run: the user's explicit choice,
+/// falling back to the RAM-sized stock recommendation.
+pub fn selected_model(settings: &crate::models::Settings) -> &'static ModelSpec {
+    match settings.builtin_model.as_str() {
+        "qivreno-agent-4b" => &MODEL_QIVRENO_4B,
+        _ => recommended_model(),
+    }
+}
+
 fn models_dir(state: &AppState) -> PathBuf {
     let dir = state.data_dir.join("models");
     std::fs::create_dir_all(&dir).ok();
@@ -72,7 +91,8 @@ fn models_dir(state: &AppState) -> PathBuf {
 }
 
 pub fn model_path(state: &AppState) -> PathBuf {
-    models_dir(state).join(recommended_model().file)
+    let settings = state.settings.lock().unwrap().clone();
+    models_dir(state).join(selected_model(&settings).file)
 }
 
 pub fn base_url(settings: &Settings) -> String {
@@ -115,7 +135,7 @@ fn ensure_engine(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn download_model(app: &AppHandle) -> Result<PathBuf, String> {
     let state = app.state::<AppState>();
-    let spec = recommended_model();
+    let spec = { let s = state.settings.lock().unwrap().clone(); selected_model(&s) };
     let final_path = models_dir(&state).join(spec.file);
     if final_path.exists() {
         return Ok(final_path);
@@ -266,6 +286,8 @@ pub struct BuiltinStatus {
     pub downloaded: u64,
     pub total: u64,
     pub model_name: String,
+    /// "" = stock auto; "qivreno-agent-4b" = the tuned model.
+    pub model_id: String,
     pub model_size_gb: f32,
     pub model_installed: bool,
     pub ram_gb: u64,
@@ -275,7 +297,7 @@ pub struct BuiltinStatus {
 pub fn status(app: &AppHandle) -> BuiltinStatus {
     let state = app.state::<AppState>();
     let settings = state.settings.lock().unwrap().clone();
-    let spec = recommended_model();
+    let spec = selected_model(&settings);
     let dl = *app.state::<BuiltinState>().download.lock().unwrap();
     BuiltinStatus {
         enabled: settings.builtin_enabled,
@@ -285,6 +307,7 @@ pub fn status(app: &AppHandle) -> BuiltinStatus {
         downloaded: dl.map(|(d, _)| d).unwrap_or(0),
         total: dl.map(|(_, t)| t).unwrap_or(0),
         model_name: spec.name.to_string(),
+        model_id: settings.builtin_model.clone(),
         model_size_gb: spec.size_gb,
         model_installed: model_path(&state).exists(),
         ram_gb: ram_gb(),

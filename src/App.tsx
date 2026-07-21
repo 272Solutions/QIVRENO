@@ -193,8 +193,36 @@ function BuiltinPanel(props: { onChanged: () => void }) {
     await invoke("builtin_disable").catch(() => {});
     props.onChanged();
   };
+  const pickModel = async (modelId: string) => {
+    if (busy || st?.model_id === modelId) return;
+    setBusy(true);
+    try {
+      await invoke("set_builtin_model", { modelId });
+      props.onChanged();
+    } catch { /* status poll shows the error */ }
+    setBusy(false);
+  };
 
   if (!st) return <div className="guide"><div className="guide-intro">Checking built-in AI…</div></div>;
+
+  const modelPicker = !st.downloading && !st.starting && (
+    <div className="radio-row" style={{ margin: "10px 0" }}>
+      <button
+        className={`radio-card ${st.model_id !== "qivreno-agent-4b" ? "selected" : ""}`}
+        onClick={() => pickModel("")}
+      >
+        <div className="rc-title">Standard</div>
+        <div className="rc-sub">Stock Qwen3, sized to this {MACHINE}</div>
+      </button>
+      <button
+        className={`radio-card ${st.model_id === "qivreno-agent-4b" ? "selected" : ""}`}
+        onClick={() => pickModel("qivreno-agent-4b")}
+      >
+        <div className="rc-title">Qivreno Tuned</div>
+        <div className="rc-sub">Trained on agent work — better tool use, reports &amp; delegation</div>
+      </button>
+    </div>
+  );
 
   return (
     <div className="guide">
@@ -204,6 +232,7 @@ function BuiltinPanel(props: { onChanged: () => void }) {
           <div className="guide-intro">
             ● Running — {st.model_name} entirely on this {MACHINE}. Agents on this backend need no other setup.
           </div>
+          {modelPicker}
           <div className="guide-actions">
             <button className="btn ghost sm" onClick={disable}>Turn off</button>
             <span className="guide-status up">● Running</span>
@@ -226,6 +255,7 @@ function BuiltinPanel(props: { onChanged: () => void }) {
             picked for this {MACHINE}'s {st.ram_gb} GB RAM) and runs it with the bundled engine. Private — nothing leaves this {MACHINE}.
           </div>
           {st.error && <div className="guide-intro" style={{ color: "var(--red)" }}>Last attempt failed: {st.error}</div>}
+          {modelPicker}
           <div className="guide-actions">
             <button className="btn sm" disabled={busy} onClick={enable}>
               {st.model_installed ? "Turn on Built-in AI" : `Download & enable (${st.model_size_gb} GB)`}
