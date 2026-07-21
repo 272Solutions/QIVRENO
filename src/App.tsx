@@ -20,6 +20,7 @@ import "./App.css";
 type View =
   | { kind: "board" }
   | { kind: "activity" }
+  | { kind: "chatroom" }
   | { kind: "library" }
   | { kind: "files" }
   | { kind: "agent"; id: string };
@@ -594,6 +595,9 @@ export default function App() {
         <button className={`nav-item ${view.kind === "board" ? "active" : ""}`} onClick={() => setView({ kind: "board" })}>
           <span className="icon">▦</span> Board
         </button>
+        <button className={`nav-item ${view.kind === "chatroom" ? "active" : ""}`} onClick={() => setView({ kind: "chatroom" })}>
+          <span className="icon">💬</span> Team Chat
+        </button>
         <button className={`nav-item ${view.kind === "activity" ? "active" : ""}`} onClick={() => setView({ kind: "activity" })}>
           <span className="icon">☰</span> Activity
         </button>
@@ -669,6 +673,7 @@ export default function App() {
           />
         )}
         {view.kind === "activity" && <ActivityFeed snap={snap} nameOf={nameOf} colorOf={colorOf} />}
+        {view.kind === "chatroom" && <ChatRoomView snap={snap} nameOf={nameOf} colorOf={colorOf} workingAgents={workingAgents} />}
         {view.kind === "library" && <LibraryView snap={snap} notify={notify} />}
         {view.kind === "files" && (
           <FilesView notify={notify} focus={filesFocus} onFocusConsumed={() => setFilesFocus(null)} />
@@ -1461,7 +1466,7 @@ function AgentView(props: {
 
         <div className="chat">
           {chat.length === 0 && !awaitingReply && (
-            <div className="empty">Say hello — messages here go straight to {agent.name}.</div>
+            <div className="empty">Say hello — type below and it goes straight to {agent.name}.</div>
           )}
           {chat.map((m) => (
             <div key={m.id} className={`bubble-row ${m.from === "user" ? "user" : "agent"}`}>
@@ -1473,6 +1478,23 @@ function AgentView(props: {
           ))}
           {awaitingReply && <div className="typing">{agent.name} is thinking…</div>}
           <div ref={endRef} />
+        </div>
+
+        <div className="chat-input">
+          <textarea
+            rows={1}
+            autoFocus
+            placeholder={`Message ${agent.name}…`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          <button className="btn sm" disabled={!draft.trim()} onClick={send}>Send</button>
         </div>
 
         {agentTasks.length > 0 && (
@@ -1491,22 +1513,100 @@ function AgentView(props: {
             </div>
           </>
         )}
+      </div>
+    </>
+  );
+}
 
-        <div className="chat-input">
-          <textarea
-            rows={1}
-            placeholder={`Message ${agent.name}…`}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          <button className="btn sm" disabled={!draft.trim()} onClick={send}>Send</button>
+/* ------------------------------------------------------------------ */
+
+/** Chat Room: the team's agent-to-agent traffic as a live conversation —
+    delegations, questions, replies — so the operator can watch the flow. */
+/** Strip raw tool markup that older failed tasks left in message bodies. */
+function cleanBody(body: string): string {
+  return body
+    .replace(/<\/?tool_(call|response)s?>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ChatRoomView(props: {
+  snap: Snapshot;
+  nameOf: (id: string) => string;
+  colorOf: (id: string) => string;
+  workingAgents: Set<string>;
+}) {
+  const { snap, nameOf, colorOf } = props;
+  const [scope, setScope] = useState<"agents" | "all">("agents");
+  const [who, setWho] = useState("all");
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const messages = useMemo(() => {
+    let ms = [...snap.messages].sort((a, b) => a.ts - b.ts);
+    if (scope === "agents") ms = ms.filter((m) => m.from !== "user" && m.to !== "user");
+    if (who !== "all") ms = ms.filter((m) => m.from === who || m.to === who);
+    return ms.slice(-300);
+  }, [snap.messages, scope, who]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [messages.length]);
+
+  const busy = snap.agents.filter((a) => props.workingAgents.has(a.id));
+
+  return (
+    <>
+      <div className="main-header">
+        <div>
+          <div className="main-title">Team Chat</div>
+          <div className="main-sub">Watch the team coordinate — delegations, questions and replies between agents</div>
         </div>
+        <div className="spacer" />
+        <select value={who} onChange={(e) => setWho(e.target.value)} style={{ maxWidth: 180 }}>
+          <option value="all">All agents</option>
+          {snap.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <button className="btn ghost sm" onClick={() => setScope(scope === "agents" ? "all" : "agents")}>
+          {scope === "agents" ? "Agents only" : "Including you"}
+        </button>
+      </div>
+      <div className="main-body">
+        {busy.length > 0 && (
+          <div className="room-live">
+            {busy.map((a) => (
+              <span key={a.id} className="room-live-chip">
+                <i style={{ background: a.color }} /> {a.name} is working…
+              </span>
+            ))}
+          </div>
+        )}
+        {messages.length === 0 ? (
+          <div className="empty">
+            No team chatter {who !== "all" ? "for this agent " : ""}yet.
+            Dispatch a multi-part project and watch Qivvy break it up and delegate —
+            every request and reply between agents lands here.
+          </div>
+        ) : (
+          <div className="room">
+            {messages.map((m) => (
+              <div className="room-msg" key={m.id}>
+                <span className="room-avatar" style={{ background: colorOf(m.from) }}>
+                  {nameOf(m.from).slice(0, 1).toUpperCase()}
+                </span>
+                <div className="room-content">
+                  <div className="room-head">
+                    <span style={{ color: colorOf(m.from), fontWeight: 650 }}>{nameOf(m.from)}</span>
+                    <span className="room-arrow">→</span>
+                    <span style={{ color: colorOf(m.to), fontWeight: 650 }}>{nameOf(m.to)}</span>
+                    <span className="room-time">{timeAgo(m.ts)}</span>
+                  </div>
+                  <div className="room-body">{cleanBody(m.body)}</div>
+                </div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+        )}
       </div>
     </>
   );
