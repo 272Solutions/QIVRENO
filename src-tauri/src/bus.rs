@@ -56,6 +56,16 @@ pub fn deliver_message(
     Ok(format!("message delivered to {}; they will respond asynchronously", recipient.name))
 }
 
+/// The task an agent is working on right now (newest if several).
+fn current_task_id(state: &AppState, agent_id: &str) -> Option<String> {
+    let tasks = state.tasks.lock().unwrap();
+    tasks
+        .iter()
+        .filter(|t| t.status == "running" && t.agent_id.as_deref() == Some(agent_id))
+        .max_by_key(|t| t.updated_at)
+        .map(|t| t.id.clone())
+}
+
 fn handle(app: &AppHandle, method: &str, path: &str, body: &str) -> (u16, Value) {
     let state = app.state::<AppState>();
     match (method, path) {
@@ -138,6 +148,69 @@ fn handle(app: &AppHandle, method: &str, path: &str, body: &str) -> (u16, Value)
                 Ok(agent) => (200, json!({"ok": true, "detail": format!("{} ({}) joined the team", agent.name, agent.role)})),
                 Err(e) => (400, json!({"error": e})),
             }
+        }
+        ("POST", "/subtask") => {
+            let Ok(v) = serde_json::from_str::<Value>(body) else {
+                return (400, json!({"error": "invalid JSON"}));
+            };
+            let token = v["token"].as_str().unwrap_or_default();
+            let Some(sender) = state.agent(token) else {
+                return (403, json!({"error": "invalid token"}));
+            };
+            // The parent is whatever the sender is running right now.
+            let Some(parent_id) = current_task_id(&state, &sender.id) else {
+                return (400, json!({"error": "you have no running task to attach a subtask to"}));
+            };
+            match runtime::create_subtask(
+                app,
+                &parent_id,
+                v["title"].as_str().unwrap_or_default(),
+                v["details"].as_str().unwrap_or_default(),
+                v["assignee"].as_str().unwrap_or_default(),
+                &sender,
+            ) {
+                Ok(msg) => (200, json!({"ok": true, "detail": msg})),
+                Err(e) => (400, json!({"error": e})),
+            }
+        }
+        ("POST", "/input_request") => {
+            let Ok(v) = serde_json::from_str::<Value>(body) else {
+                return (400, json!({"error": "invalid JSON"}));
+            };
+            let token = v["token"].as_str().unwrap_or_default();
+            let Some(sender) = state.agent(token) else {
+                return (403, json!({"error": "invalid token"}));
+            };
+            let question = v["question"].as_str().unwrap_or_default().trim().to_string();
+            if question.is_empty() {
+                return (400, json!({"error": "input_request needs a question"}));
+            }
+            // Stage the question on the sender's running task; the runtime
+            // parks it in Requires Input when this run finishes.
+            let staged = {
+                let mut tasks = state.tasks.lock().unwrap();
+                match tasks
+                    .iter_mut()
+                    .filter(|t| t.status == "running" && t.agent_id.as_deref() == Some(sender.id.as_str()))
+                    .max_by_key(|t| t.updated_at)
+                {
+                    Some(t) => {
+                        t.input_request = question;
+                        t.log.push("asked the operator for input — task pauses when this run ends".into());
+                        t.updated_at = crate::models::now_ms();
+                        true
+                    }
+                    None => false,
+                }
+            };
+            if !staged {
+                return (400, json!({"error": "you have no running task to pause"}));
+            }
+            state.save_tasks();
+            runtime::emit_changed(app);
+            (200, json!({"ok": true, "detail":
+                "question recorded — now finish your run with a brief note that you are waiting. \
+                 The task parks in Requires Input and resumes automatically with the operator's answer."}))
         }
         ("POST", "/board/move") => {
             let Ok(v) = serde_json::from_str::<Value>(body) else {

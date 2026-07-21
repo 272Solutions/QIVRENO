@@ -476,10 +476,14 @@ pub fn schedule(app: &AppHandle) {
 fn run_task(app: AppHandle, task_id: String) {
     let state = app.state::<AppState>();
     let (task, agent, settings) = {
-        let tasks = state.tasks.lock().unwrap();
-        let Some(task) = tasks.iter().find(|t| t.id == task_id).cloned() else {
+        let mut tasks = state.tasks.lock().unwrap();
+        let Some(task) = tasks.iter_mut().find(|t| t.id == task_id) else {
             return;
         };
+        // A stale staged question from an earlier failed run must not park
+        // this fresh run the moment it succeeds.
+        task.input_request = String::new();
+        let task = task.clone();
         let agent = task.agent_id.as_deref().and_then(|id| state.agent(id));
         (task, agent, state.settings.lock().unwrap().clone())
     };
@@ -921,7 +925,18 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
              To move a task on it: curl -s -X POST http://127.0.0.1:{port}/board/move \
              -H 'Content-Type: application/json' \
              -d '{{\"token\":\"{token}\",\"task\":\"<task id or exact title>\",\"column\":\"<column>\"}}'\n\
-             Tasks you complete move to review automatically — do not move your own current task.\n",
+             Tasks you complete move to review automatically — do not move your own current task.\n\
+             \nLarge or multi-part projects: split the work into subtasks and delegate each one:\n\
+             curl -s -X POST http://127.0.0.1:{port}/subtask -H 'Content-Type: application/json' \
+             -d '{{\"token\":\"{token}\",\"title\":\"<short subtask title>\",\"details\":\"<goal, inputs, expected deliverable>\",\"assignee\":\"<teammate name, or empty for best fit>\"}}'\n\
+             Each subtask stays linked to your current task on the board and its result comes back \
+             to you as a new task when it finishes — do not wait for it in this run.\n\
+             \nIf you are blocked on a decision or missing information only the operator has:\n\
+             curl -s -X POST http://127.0.0.1:{port}/input_request -H 'Content-Type: application/json' \
+             -d '{{\"token\":\"{token}\",\"question\":\"<ONE complete question, with enough context to answer it cold>\"}}'\n\
+             Then end your run with a short note that you are waiting. Your task parks in Requires \
+             Input and resumes automatically with the operator's answer. Use it sparingly; prefer \
+             sensible assumptions (and state them) for anything reversible.\n",
             port = settings.bus_port,
             token = agent.id,
         )),
@@ -1201,16 +1216,29 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
     let state = app.state::<AppState>();
     let was_cancelled = state.cancelled.lock().unwrap().remove(task_id);
     let mut reply_ctx: Option<(Task, Agent)> = None;
-    // request_input pause: park the task instead of completing it.
+    // request_input pause: park the task instead of completing it. The
+    // question arrives either in-band (AWAIT_INPUT sentinel from the local
+    // tool loop) or staged on the task by a CLI agent via POST /input_request.
     if let Ok(result) = &outcome {
-        if let Some(question) = result.strip_prefix(AWAIT_INPUT) {
+        let question = result
+            .strip_prefix(AWAIT_INPUT)
+            .map(|q| q.trim().to_string())
+            .or_else(|| {
+                let tasks = state.tasks.lock().unwrap();
+                tasks
+                    .iter()
+                    .find(|t| t.id == task_id)
+                    .map(|t| t.input_request.trim().to_string())
+                    .filter(|q| !q.is_empty())
+            });
+        if let Some(question) = question {
             if !was_cancelled {
                 {
                     let mut tasks = state.tasks.lock().unwrap();
                     if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
                         t.status = "waiting".into();
                         t.column = "requires_input".into();
-                        t.input_request = question.trim().to_string();
+                        t.input_request = question;
                         t.log.push("paused: waiting for operator input".into());
                         t.updated_at = now_ms();
                     }
