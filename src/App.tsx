@@ -820,6 +820,10 @@ export default function App() {
    in Shared/. Shown in the sidebar below Quick Start Team; the optional
    context field is folded into the dispatched prompt. */
 const GET_STARTED: { icon: IconName; label: string; desc: string; hint: string; prompt: (ctx: string) => string }[] = [
+  // Ordered by how commonly small businesses reach for AI (2025-26 NFIB /
+  // QuickBooks / U.S. Chamber / Adobe surveys): marketing content first,
+  // then customer communication, sales & admin drafting, research,
+  // finances, getting paid, hiring, and process documentation.
   {
     icon: "megaphone",
     label: "Marketing Plan",
@@ -831,14 +835,14 @@ const GET_STARTED: { icon: IconName; label: string; desc: string; hint: string; 
       "Deliver as Shared/Marketing Plan.md.",
   },
   {
-    icon: "deck",
-    label: "Pitch Deck",
-    desc: "An investor-style deck: problem, solution, market, business model, traction, team, and the ask.",
-    hint: "What's the company or product, and who's the audience?",
+    icon: "calendar",
+    label: "Social Media Calendar",
+    desc: "A month of ready-to-post content: date, platform, post copy, hashtags, and a visual idea for each.",
+    hint: "Which platforms, and anything to promote this month? e.g. Instagram + Facebook, spring sale",
     prompt: (ctx) =>
-      `Build a pitch deck${ctx ? ` for: ${ctx}.` : ". Use our Business Profile in the Library; ask me anything essential that's missing."} ` +
-      "Roughly 10 slides: problem, solution, product, market size, business model, traction or go-to-market plan, team, and a clear ask. " +
-      "Deliver as Shared/Pitch Deck.slides.json so it exports to PowerPoint.",
+      `Create one month of social media content${ctx ? ` — details: ${ctx}.` : ". Use our Business Profile in the Library for voice and audience; ask me anything essential that's missing."} ` +
+      "Write every post in full, in our brand voice — a realistic mix of promotional, educational and personable posts, 3-4 per week. " +
+      "Deliver as Shared/Social Media Calendar.csv with the header row: Date,Platform,Post,Hashtags,Visual idea.",
   },
   {
     icon: "envelope",
@@ -851,23 +855,77 @@ const GET_STARTED: { icon: IconName; label: string; desc: string; hint: string; 
       "Deliver as Shared/Marketing Emails.md.",
   },
   {
-    icon: "recruit",
-    label: "Recruit a Sales Manager",
-    desc: "A hiring kit: job description, screening questions, interview plan with scorecard, and outreach message.",
-    hint: "Anything specific? e.g. remote, $90k base, industrial clients",
+    icon: "chat",
+    label: "Customer Reply Templates",
+    desc: "Ready-to-send replies for your most common customer questions, complaints, and requests — in your voice.",
+    hint: "What do customers ask most? e.g. pricing, refunds, how long a job takes",
     prompt: (ctx) =>
-      `Help me recruit a new sales manager${ctx ? ` — requirements: ${ctx}.` : "."} ` +
-      "Produce a hiring kit: job description, where to post it, five screening questions, a structured interview plan with a scorecard, and a first-touch candidate outreach message. " +
-      "Deliver as Shared/Sales Manager Hiring Kit.md.",
+      `Write a set of customer-service reply templates${ctx ? ` covering: ${ctx}.` : ". Base the topics on our Business Profile in the Library, and ask me for our most common customer questions if unclear."} ` +
+      "Cover at least: a price/quote request, a scheduling request, a complaint, a refund request, a late-delivery apology, and a thank-you/review ask. " +
+      "Each template: when to use it, the full reply, and the parts to personalize in [brackets]. Warm, professional, in our voice. " +
+      "Deliver as Shared/Customer Reply Templates.md.",
+  },
+  {
+    icon: "doc",
+    label: "Sales Proposal",
+    desc: "A polished, client-ready proposal: their need, your offer, pricing approach, timeline, and next steps.",
+    hint: "Who's it for and what do they need? e.g. Acme Corp, monthly IT support for 20 staff",
+    prompt: (ctx) =>
+      `Create a client-ready sales proposal${ctx ? ` for: ${ctx}.` : ". Ask me who it's for and what they need before writing."} ` +
+      "Include: a short summary of their situation and need, our proposed approach, scope and deliverables, pricing approach, timeline, why us, and clear next steps. " +
+      "Deliver as a polished document named Shared/Sales Proposal - [client name].md.",
+  },
+  {
+    icon: "search",
+    label: "Competitor Research",
+    desc: "A brief on your top competitors: offers, pricing, strengths, weaknesses, and how to win against them.",
+    hint: "Name 2-4 competitors, or describe your market and area",
+    prompt: (ctx) =>
+      `Research my competitors${ctx ? `: ${ctx}.` : ". Use our Business Profile in the Library to identify the likely competitors, and confirm the list with me before going deep."} ` +
+      "For each: what they offer, pricing (where findable), positioning, strengths, weaknesses, and reviews/reputation signals. " +
+      "Finish with a comparison table and the three clearest opportunities for us to win. " +
+      "Deliver as Shared/Competitor Research Brief.md.",
   },
   {
     icon: "chart",
-    label: "P&L Dashboard",
-    desc: "Visualizes last quarter's profit and loss: revenue, costs, net, and the biggest line items.",
-    hint: "Paste the numbers, or name a P&L file you've dropped in Shared/",
+    label: "Cash-Flow Forecast",
+    desc: "A 12-week cash dashboard: money in, money out, projected balance, and the crunch points to watch.",
+    hint: "Paste your numbers (cash on hand, expected income, regular bills), or name a file in Shared/",
     prompt: (ctx) =>
-      `Help me visualize my profit and loss over the last quarter. ${ctx ? `The numbers: ${ctx}.` : "[No numbers provided — read the newest spreadsheet in Shared/, or ask me for the figures.]"} ` +
-      "Build Shared/Quarterly P&L Dashboard.dash.json with stat widgets for revenue, total costs and net profit, a monthly revenue-vs-costs bar chart, and a table of the largest line items.",
+      `Build me a 12-week cash-flow forecast. ${ctx ? `The numbers: ${ctx}.` : "[No numbers provided — read the newest spreadsheet in Shared/, or ask me for cash on hand, expected money in, and regular outgoings.]"} ` +
+      "State any assumptions you make. Build Shared/Cash-Flow Forecast.dash.json with stat widgets for cash on hand, expected in, expected out and lowest projected balance, " +
+      "a weekly projected-balance line chart, and a table of the largest upcoming payments. Flag any week the balance goes uncomfortably low.",
+  },
+  {
+    icon: "card",
+    label: "Chase Overdue Invoices",
+    desc: "A 3-step reminder sequence — friendly nudge, firm follow-up, final notice — ready to send.",
+    hint: "Who owes what, and how late? e.g. Smith & Co, $2,400, 30 days overdue",
+    prompt: (ctx) =>
+      `Write a 3-step overdue invoice reminder sequence${ctx ? ` for: ${ctx}.` : " I can reuse for any late-paying customer."} ` +
+      "Email 1: friendly nudge (assumes they forgot). Email 2: firm follow-up (references the first, asks for a payment date). Email 3: final notice (professional, states next steps). " +
+      "Each with a subject line and body, personalization in [brackets], and a one-line tip on timing between sends. Firm but relationship-preserving. " +
+      "Deliver as Shared/Invoice Reminder Sequence.md.",
+  },
+  {
+    icon: "recruit",
+    label: "Hiring Kit",
+    desc: "Everything to hire a role: job description, where to post, screening questions, interview plan, scorecard.",
+    hint: "What role? e.g. part-time bookkeeper, remote, $25/hr",
+    prompt: (ctx) =>
+      `Help me hire${ctx ? ` — the role: ${ctx}.` : ". Ask me what role I'm hiring for and any requirements before writing."} ` +
+      "Produce a hiring kit: job description, where to post it, five screening questions, a structured interview plan with a scorecard, and a first-touch candidate outreach message. " +
+      "Deliver as Shared/[Role] Hiring Kit.md.",
+  },
+  {
+    icon: "book",
+    label: "Document a Process",
+    desc: "Turns how you do something into a numbered, repeatable process — saved to the Library so the whole team follows it.",
+    hint: "Which process? e.g. how we onboard a new client",
+    prompt: (ctx) =>
+      `Document one of our processes as a clear, numbered, repeatable procedure anyone could follow${ctx ? ` — the process: ${ctx}.` : ". Ask me which process to document."} ` +
+      "Interview me for the steps you can't infer (use request_input), don't invent details. " +
+      "Save it to the Library as a process, and also deliver a copy as Shared/[Process Name] SOP.md.",
   },
 ];
 
