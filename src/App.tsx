@@ -9,6 +9,7 @@ import {
   SharedFile, Snapshot, Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
+import { Icon, IconName } from "./Icon";
 
 /* Platform-aware UI strings: the same build runs on macOS and Windows. */
 const IS_MAC = navigator.userAgent.includes("Mac");
@@ -113,7 +114,7 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     intro: "LM Studio runs local models with a friendly UI, and works with any OpenAI-compatible server (LocalAI, llama.cpp…).",
     steps: [
       "Download LM Studio and install it.",
-      "Inside LM Studio, use the search (🔍) to download a model that supports tool use — e.g. Qwen3 8B.",
+      "Inside LM Studio, use the search bar to download a model that supports tool use — e.g. Qwen3 8B.",
       "Open the Developer tab and start the local server (default port 1234), with the model loaded.",
       "Qivreno connects at localhost:1234/v1 (changeable in Settings).",
     ],
@@ -126,7 +127,7 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     steps: [
       "Install Claude Code — the desktop app from the link below, or in Terminal:  npm install -g @anthropic-ai/claude-code",
       "Run  claude  once in Terminal and log in with your Claude account.",
-      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings (⚙).",
+      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings.",
     ],
     url: "https://claude.com/product/claude-code",
     urlLabel: "Open claude.com/claude-code",
@@ -136,7 +137,7 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     intro: "Agents call Google's Gemini models with your own API key, using Qivreno's native tools (board, files, calendar, everything). Google's free tier needs no card.",
     steps: [
       "Open Google AI Studio (link below) and click Create API key — a Google account is all you need.",
-      "Paste the key into Settings (⚙) → Gemini API key.",
+      "Paste the key into Settings → Gemini API key.",
       "Pick Gemini as the backend when creating or editing an agent (default model: gemini-2.5-flash; set another in the agent's model field).",
     ],
     url: "https://aistudio.google.com/apikey",
@@ -147,7 +148,7 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     intro: "Agents call xAI's Grok models through your own API key. Unlike the CLIs, Grok uses Qivreno's native tools, so the full board/library/calendar toolset works.",
     steps: [
       "Create an xAI account and generate an API key at console.x.ai.",
-      "Paste the key into Settings (⚙) → Grok API key.",
+      "Paste the key into Settings → Grok API key.",
       "Pick Grok as the backend when creating or editing an agent (default model: grok-4-fast; set another in the agent's model field).",
     ],
     url: "https://console.x.ai",
@@ -159,7 +160,7 @@ const GUIDES: Partial<Record<BackendKind, Guide>> = {
     steps: [
       "Install Node.js if you don't have it (nodejs.org), then in Terminal:  npm install -g @openai/codex",
       "Run  codex  once in Terminal and sign in with your ChatGPT account.",
-      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings (⚙).",
+      "Qivreno auto-detects the CLI. If it isn't found, set the path manually in Settings.",
     ],
     url: "https://developers.openai.com/codex/cli",
     urlLabel: "Open Codex CLI docs",
@@ -593,19 +594,19 @@ export default function App() {
           <img className="brand-lockup" src="/logo-white.png" alt="Qivreno — AI Workforce Platform" />
         </div>
         <button className={`nav-item ${view.kind === "board" ? "active" : ""}`} onClick={() => setView({ kind: "board" })}>
-          <span className="icon">▦</span> Board
+          <span className="icon"><Icon name="board" /></span> Board
         </button>
         <button className={`nav-item ${view.kind === "chatroom" ? "active" : ""}`} onClick={() => setView({ kind: "chatroom" })}>
-          <span className="icon">💬</span> Team Chat
+          <span className="icon"><Icon name="chat" /></span> Team Chat
         </button>
         <button className={`nav-item ${view.kind === "activity" ? "active" : ""}`} onClick={() => setView({ kind: "activity" })}>
-          <span className="icon">☰</span> Activity
+          <span className="icon"><Icon name="list" /></span> Activity
         </button>
         <button className={`nav-item ${view.kind === "library" ? "active" : ""}`} onClick={() => setView({ kind: "library" })}>
-          <span className="icon">▤</span> Library
+          <span className="icon"><Icon name="library" /></span> Library
         </button>
         <button className={`nav-item ${view.kind === "files" ? "active" : ""}`} onClick={() => setView({ kind: "files" })}>
-          <span className="icon">🗎</span> Files
+          <span className="icon"><Icon name="doc" /></span> Files
         </button>
         <div className="section-label">
           <span>Agents</span>
@@ -633,11 +634,11 @@ export default function App() {
         </button>
         {snap.agents.filter((a) => !a.system).length < MAX_AGENTS && (
           <button className="add-agent quickstart" onClick={() => setShowTemplates(true)}>
-            ✨ Quick Start Team
+            <Icon name="spark" /> Quick Start Team
           </button>
         )}
         <button className="add-agent getstarted" onClick={() => setShowGetStarted(true)}>
-          🚀 Get Started
+          <Icon name="rocket" /> Get Started
         </button>
         <div className="sidebar-footer">
           <div className="backend-dots">
@@ -658,7 +659,7 @@ export default function App() {
       <main className="main">
         <div className="app-toolbar">
           <button className="header-btn" title="Settings" onClick={() => setShowSettings(true)}>
-            ⚙<span className="lbl">Settings</span>
+            <Icon name="gear" /><span className="lbl">Settings</span>
           </button>
         </div>
         {view.kind === "board" && (
@@ -725,7 +726,7 @@ export default function App() {
       {showGetStarted && (
         <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGetStarted(false); }}>
           <div className="modal" style={{ maxWidth: 520 }}>
-            <h2>🚀 Get Started</h2>
+            <h2><Icon name="rocket" /> Get Started</h2>
             <p className="hint" style={{ margin: "8px 0 14px" }}>
               Pick a ready-made job and the team builds it for you — the finished document lands in Files.
             </p>
@@ -736,7 +737,7 @@ export default function App() {
                   className="gs-pick"
                   onClick={() => { setShowGetStarted(false); setGetStarted(g); }}
                 >
-                  <span className="gs-pick-icon">{g.icon}</span>
+                  <span className="gs-pick-icon"><Icon name={g.icon} /></span>
                   <span className="gs-pick-text">
                     <span className="gs-pick-title">{g.label}</span>
                     <span className="gs-pick-desc">{g.desc}</span>
@@ -818,9 +819,9 @@ export default function App() {
 /* Get Started templates: one-click briefs that produce a defined deliverable
    in Shared/. Shown in the sidebar below Quick Start Team; the optional
    context field is folded into the dispatched prompt. */
-const GET_STARTED: { icon: string; label: string; desc: string; hint: string; prompt: (ctx: string) => string }[] = [
+const GET_STARTED: { icon: IconName; label: string; desc: string; hint: string; prompt: (ctx: string) => string }[] = [
   {
-    icon: "📣",
+    icon: "megaphone",
     label: "Marketing Plan",
     desc: "A 30-day plan: audience, channel mix, week-by-week calendar, three sample posts, and success metrics.",
     hint: "What are you marketing? e.g. a bookkeeping service for restaurants",
@@ -830,7 +831,7 @@ const GET_STARTED: { icon: string; label: string; desc: string; hint: string; pr
       "Deliver as Shared/Marketing Plan.md.",
   },
   {
-    icon: "📽",
+    icon: "deck",
     label: "Pitch Deck",
     desc: "An investor-style deck: problem, solution, market, business model, traction, team, and the ask.",
     hint: "What's the company or product, and who's the audience?",
@@ -840,7 +841,7 @@ const GET_STARTED: { icon: string; label: string; desc: string; hint: string; pr
       "Deliver as Shared/Pitch Deck.slides.json so it exports to PowerPoint.",
   },
   {
-    icon: "✉️",
+    icon: "envelope",
     label: "Marketing Emails",
     desc: "Turns your product info into a 3-email sequence: awareness, value, and call-to-action.",
     hint: "Paste product info here, or name a file you've dropped in Shared/",
@@ -850,7 +851,7 @@ const GET_STARTED: { icon: string; label: string; desc: string; hint: string; pr
       "Deliver as Shared/Marketing Emails.md.",
   },
   {
-    icon: "🤝",
+    icon: "recruit",
     label: "Recruit a Sales Manager",
     desc: "A hiring kit: job description, screening questions, interview plan with scorecard, and outreach message.",
     hint: "Anything specific? e.g. remote, $90k base, industrial clients",
@@ -860,7 +861,7 @@ const GET_STARTED: { icon: string; label: string; desc: string; hint: string; pr
       "Deliver as Shared/Sales Manager Hiring Kit.md.",
   },
   {
-    icon: "📊",
+    icon: "chart",
     label: "P&L Dashboard",
     desc: "Visualizes last quarter's profit and loss: revenue, costs, net, and the biggest line items.",
     hint: "Paste the numbers, or name a P&L file you've dropped in Shared/",
@@ -895,7 +896,7 @@ function GetStartedModal(props: {
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal" style={{ maxWidth: 460 }}>
-        <h2>{props.tpl.icon} {props.tpl.label}</h2>
+        <h2><Icon name={props.tpl.icon} /> {props.tpl.label}</h2>
         <p className="hint" style={{ margin: "8px 0 14px" }}>{props.tpl.desc}</p>
         <div className="field">
           <label>Your specifics (optional — the team asks if it needs more)</label>
@@ -919,7 +920,7 @@ function GetStartedModal(props: {
         <div className="modal-actions">
           <button className="btn ghost" onClick={props.onClose}>Cancel</button>
           {!props.hasAgents ? (
-            <button className="btn" onClick={props.onQuickStart}>✨ Quick Start Team</button>
+            <button className="btn" onClick={props.onQuickStart}><Icon name="spark" /> Quick Start Team</button>
           ) : (
             <button className="btn" disabled={busy} onClick={dispatch}>
               {busy ? "Dispatching…" : `Dispatch to team ${MOD_ENTER}`}
@@ -931,15 +932,15 @@ function GetStartedModal(props: {
   );
 }
 
-const OUTCOMES: { label: string; prompt: string }[] = [
-  { label: "📑 Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a polished document in Shared/." },
-  { label: "🔍 Research a prospect", prompt: "Research [company name] before my meeting on [date]. I need: company background, what they likely care about right now, talking points for us, and questions to ask. Deliver a one-page brief to Shared/." },
-  { label: "📣 Develop a marketing plan", prompt: "Develop a 30-day marketing plan for [product/service]. Include the channel mix, a content calendar, three sample posts in our brand voice, and how we'll measure it. Deliver to Shared/." },
-  { label: "📽 Build a presentation", prompt: "Build a presentation about [topic] for [audience]. Roughly 8 slides: the story, supporting numbers, and a clear ask at the end. Deliver as a deck in Shared/ so I can export it to PowerPoint." },
-  { label: "📘 Document a process", prompt: "Document how we [process, e.g. onboard a new client] as a numbered, repeatable process anyone on the team could follow. Ask me what you need to know, then save it to the Library." },
-  { label: "🗺 Plan a project", prompt: "Plan the project: [what you want done]. Break it into workstreams with owners, sequence and dependencies, risks, and a timeline. If it spans several specialties, split it into subtasks for the team." },
-  { label: "📊 Analyze a spreadsheet", prompt: "Analyze the spreadsheet [drop it in Shared/ first, then name it here]. I want the trends, anything unusual, and a short memo with the three decisions the numbers suggest. Deliver analysis and memo to Shared/." },
-  { label: "🏢 Set up my back office", prompt: "Set up my business back office: interview me about the business, then produce our core operating documents (key policies, a client onboarding procedure, a job description template, and a simple KPI review)." },
+const OUTCOMES: { icon: IconName; label: string; prompt: string }[] = [
+  { icon: "doc", label: "Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a polished document in Shared/." },
+  { icon: "search", label: "Research a prospect", prompt: "Research [company name] before my meeting on [date]. I need: company background, what they likely care about right now, talking points for us, and questions to ask. Deliver a one-page brief to Shared/." },
+  { icon: "megaphone", label: "Develop a marketing plan", prompt: "Develop a 30-day marketing plan for [product/service]. Include the channel mix, a content calendar, three sample posts in our brand voice, and how we'll measure it. Deliver to Shared/." },
+  { icon: "deck", label: "Build a presentation", prompt: "Build a presentation about [topic] for [audience]. Roughly 8 slides: the story, supporting numbers, and a clear ask at the end. Deliver as a deck in Shared/ so I can export it to PowerPoint." },
+  { icon: "book", label: "Document a process", prompt: "Document how we [process, e.g. onboard a new client] as a numbered, repeatable process anyone on the team could follow. Ask me what you need to know, then save it to the Library." },
+  { icon: "nodes", label: "Plan a project", prompt: "Plan the project: [what you want done]. Break it into workstreams with owners, sequence and dependencies, risks, and a timeline. If it spans several specialties, split it into subtasks for the team." },
+  { icon: "chart", label: "Analyze a spreadsheet", prompt: "Analyze the spreadsheet [drop it in Shared/ first, then name it here]. I want the trends, anything unusual, and a short memo with the three decisions the numbers suggest. Deliver analysis and memo to Shared/." },
+  { icon: "building", label: "Set up my back office", prompt: "Set up my business back office: interview me about the business, then produce our core operating documents (key policies, a client onboarding procedure, a job description template, and a simple KPI review)." },
 ];
 
 function KanbanBoard(props: {
@@ -1014,7 +1015,7 @@ function KanbanBoard(props: {
           />
           <div className="composer-row">
             <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-              <option value="auto">🎯 Best fit (auto-route)</option>
+              <option value="auto">Best fit (auto-route)</option>
               {snap.agents.map((a) => (
                 <option key={a.id} value={a.id}>{a.name} — {a.role}</option>
               ))}
@@ -1035,9 +1036,9 @@ function KanbanBoard(props: {
               Welcome to Qivreno. The fastest start: let the <b>Concierge</b> interview you,
               fill in your business profile, and hire the right team automatically.
             </p>
-            <button className="btn" onClick={props.onConcierge}>🪄 Set up with the Concierge</button>
+            <button className="btn" onClick={props.onConcierge}><Icon name="wand" /> Set up with the Concierge</button>
             <p style={{ margin: "14px 0" }}>…or do it yourself:</p>
-            <button className="btn ghost" onClick={props.onQuickStart}>✨ Quick Start Team</button>
+            <button className="btn ghost" onClick={props.onQuickStart}><Icon name="spark" /> Quick Start Team</button>
             <span style={{ margin: "0 10px" }}>or</span>
             <button className="btn ghost" onClick={props.onNewAgent}>+ New Agent</button>
           </div>
@@ -1060,7 +1061,7 @@ function KanbanBoard(props: {
                     document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus();
                   }}
                 >
-                  {o.label}
+                  <Icon name={o.icon} /> {o.label}
                 </button>
               ))}
             </div>
@@ -1110,7 +1111,7 @@ function KanbanBoard(props: {
                         )}
                         {t.column === "requires_input" && t.input_request && (
                           <div className="kcard-needs">
-                            <div className="kcard-needs-tag">❓ Needs your input</div>
+                            <div className="kcard-needs-tag"><Icon name="question" /> Needs your input</div>
                             <div className="kcard-needs-q">{t.input_request}</div>
                             <div className="kcard-needs-cta">Open to respond →</div>
                           </div>
@@ -1173,7 +1174,7 @@ function InputRequestBox(props: {
   };
   return (
     <div className="input-request">
-      <div className="input-request-head">❓ The agent needs your input to continue</div>
+      <div className="input-request-head"><Icon name="question" /> The agent needs your input to continue</div>
       <div className="input-request-q">{props.task.input_request}</div>
       <textarea
         className="input-request-field"
@@ -1198,35 +1199,35 @@ function InputRequestBox(props: {
 }
 
 /** Turn a raw log line into a human-readable action for review. */
-function prettyAction(line: string): { icon: string; text: string; file?: string } {
+function prettyAction(line: string): { icon: IconName; text: string; file?: string } {
   const grab = (k: string) => line.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`))?.[1];
   if (line.startsWith("tool: ")) {
     const name = line.slice(6).split(" ")[0];
     switch (name) {
       case "write_file": {
         const path = grab("path") ?? "a file";
-        return { icon: "📄", text: `Wrote ${path}`, file: path.startsWith("Shared/") ? path.slice(7) : undefined };
+        return { icon: "doc", text: `Wrote ${path}`, file: path.startsWith("Shared/") ? path.slice(7) : undefined };
       }
-      case "read_file": return { icon: "👁", text: `Read ${grab("path") ?? "a file"}` };
-      case "list_files": return { icon: "📁", text: "Browsed files" };
-      case "save_process": return { icon: "📚", text: `Saved process “${grab("title") ?? "…"}” to the Library` };
-      case "read_doc": return { icon: "📚", text: `Read library doc ${grab("doc") ?? ""}` };
-      case "list_library": return { icon: "📚", text: "Checked the Library" };
-      case "send_message": return { icon: "💬", text: `Messaged ${grab("to") ?? "a teammate"}: “${(grab("body") ?? "").slice(0, 70)}…”` };
-      case "update_memory": return { icon: "🧠", text: `Updated ${grab("scope") === "shared" ? "the team's shared" : "its private"} memory` };
-      case "move_task": return { icon: "📋", text: `Moved board task ${grab("task") ?? ""} to ${grab("column") ?? ""}` };
-      case "create_agent": return { icon: "🤝", text: `Hired new agent “${grab("name") ?? ""}”` };
-      case "list_board": return { icon: "📋", text: "Checked the board" };
-      case "fetch_url": return { icon: "🌐", text: `Fetched ${grab("url") ?? "a URL"}` };
-      case "run_command": return { icon: "⚡", text: `Ran a command: ${(grab("command") ?? "").slice(0, 70)}` };
-      default: return { icon: "🔧", text: line.slice(6) };
+      case "read_file": return { icon: "eye", text: `Read ${grab("path") ?? "a file"}` };
+      case "list_files": return { icon: "folder", text: "Browsed files" };
+      case "save_process": return { icon: "library", text: `Saved process “${grab("title") ?? "…"}” to the Library` };
+      case "read_doc": return { icon: "library", text: `Read library doc ${grab("doc") ?? ""}` };
+      case "list_library": return { icon: "library", text: "Checked the Library" };
+      case "send_message": return { icon: "chat", text: `Messaged ${grab("to") ?? "a teammate"}: “${(grab("body") ?? "").slice(0, 70)}…”` };
+      case "update_memory": return { icon: "nodes", text: `Updated ${grab("scope") === "shared" ? "the team's shared" : "its private"} memory` };
+      case "move_task": return { icon: "board", text: `Moved board task ${grab("task") ?? ""} to ${grab("column") ?? ""}` };
+      case "create_agent": return { icon: "recruit", text: `Hired new agent “${grab("name") ?? ""}”` };
+      case "list_board": return { icon: "board", text: "Checked the board" };
+      case "fetch_url": return { icon: "globe", text: `Fetched ${grab("url") ?? "a URL"}` };
+      case "run_command": return { icon: "bolt", text: `Ran a command: ${(grab("command") ?? "").slice(0, 70)}` };
+      default: return { icon: "wrench", text: line.slice(6) };
     }
   }
-  if (line.startsWith("routed to best fit")) return { icon: "🎯", text: line };
-  if (line.startsWith("started on")) return { icon: "▶️", text: line };
-  if (line.includes("falling back")) return { icon: "⚠️", text: line };
-  if (line.startsWith("error:")) return { icon: "❌", text: line };
-  return { icon: "·", text: line };
+  if (line.startsWith("routed to best fit")) return { icon: "target", text: line };
+  if (line.startsWith("started on")) return { icon: "play", text: line };
+  if (line.includes("falling back")) return { icon: "warning", text: line };
+  if (line.startsWith("error:")) return { icon: "error", text: line };
+  return { icon: "dot", text: line };
 }
 
 function fmtDuration(ms: number): string {
@@ -1283,7 +1284,7 @@ function TaskDetailModal(props: {
               <div className="file-chips">
                 {files.map((f) => (
                   <button key={f} className="file-chip" onClick={() => { props.onOpenFile(f); props.onClose(); }} title={f}>
-                    📄 {displayName(f)} <span>open →</span>
+                    <Icon name="doc" /> {displayName(f)} <span>open →</span>
                   </button>
                 ))}
               </div>
@@ -1294,7 +1295,7 @@ function TaskDetailModal(props: {
               <h4>Actions taken</h4>
               <div className="act-list">
                 {actions.map((a, i) => (
-                  <div className="act-line" key={i}><span className="act-ico">{a.icon}</span> {a.text}</div>
+                  <div className="act-line" key={i}><span className="act-ico"><Icon name={a.icon} /></span> {a.text}</div>
                 ))}
               </div>
             </div>
@@ -1668,12 +1669,12 @@ function localModelsFor(backend: BackendKind, avail: Availability): string[] | n
 
 /* ---------------- Shared Files ---------------- */
 
-const KIND_META: Record<string, { icon: string; label: string; exports: { label: string; format: string }[] }> = {
-  document: { icon: "📄", label: "Document", exports: [{ label: "Word", format: "docx" }, { label: "PDF", format: "pdf" }] },
-  spreadsheet: { icon: "▦", label: "Spreadsheet", exports: [{ label: "Excel", format: "xlsx" }, { label: "PDF", format: "pdf" }] },
-  presentation: { icon: "🖥", label: "Presentation", exports: [{ label: "PowerPoint", format: "pptx" }, { label: "PDF", format: "pdf" }] },
-  dashboard: { icon: "📊", label: "Dashboard", exports: [{ label: "HTML", format: "html" }, { label: "PDF", format: "pdf" }] },
-  other: { icon: "🗎", label: "File", exports: [] },
+const KIND_META: Record<string, { icon: IconName; label: string; exports: { label: string; format: string }[] }> = {
+  document: { icon: "doc", label: "Document", exports: [{ label: "Word", format: "docx" }, { label: "PDF", format: "pdf" }] },
+  spreadsheet: { icon: "grid", label: "Spreadsheet", exports: [{ label: "Excel", format: "xlsx" }, { label: "PDF", format: "pdf" }] },
+  presentation: { icon: "deck", label: "Presentation", exports: [{ label: "PowerPoint", format: "pptx" }, { label: "PDF", format: "pdf" }] },
+  dashboard: { icon: "chart", label: "Dashboard", exports: [{ label: "HTML", format: "html" }, { label: "PDF", format: "pdf" }] },
+  other: { icon: "file", label: "File", exports: [] },
 };
 
 /* New-file templates: the user names the file and describes what they want;
@@ -1878,7 +1879,7 @@ function SlidesView(props: { text: string }) {
           <>
             <div className="deck-h">{slides[cur - 1]?.title}</div>
             <ul>{(slides[cur - 1]?.bullets ?? []).map((b, i) => <li key={i}>{mdInline(b, i)}</li>)}</ul>
-            {slides[cur - 1]?.notes && <div className="deck-notes">🗒 {slides[cur - 1].notes}</div>}
+            {slides[cur - 1]?.notes && <div className="deck-notes"><Icon name="note" /> {slides[cur - 1].notes}</div>}
           </>
         )}
       </div>
@@ -2223,11 +2224,11 @@ function FilesView(props: {
           <div className="file-new-row">
             {NEW_FILE_TEMPLATES.map((t) => (
               <button key={t.kind} className="file-new" title={`New ${KIND_META[t.kind].label}`} onClick={() => setNaming({ tpl: t, title: "", brief: "" })}>
-                {KIND_META[t.kind].icon}<span>{KIND_META[t.kind].label}</span>
+                <Icon name={KIND_META[t.kind].icon} /><span>{KIND_META[t.kind].label}</span>
               </button>
             ))}
             <button className="file-new" title="New folder" onClick={() => setNewFolder("")}>
-              📁<span>Folder</span>
+              <Icon name="folder" /><span>Folder</span>
             </button>
           </div>
           {newFolder !== null && (
@@ -2251,7 +2252,7 @@ function FilesView(props: {
             <input
               className="file-search"
               type="text"
-              placeholder="🔍 Search files…"
+              placeholder="Search files…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -2303,7 +2304,7 @@ function FilesView(props: {
                     <div className="section-label"><span>Folders</span><span>{subFolders.length}</span></div>
                     {subFolders.map((f) => (
                       <button key={f.name} className="lib-item folder-item" onClick={() => { setCwd(f.name); setQuery(""); }}>
-                        <span className="lib-item-title">📁 {displayName(f.name)}</span>
+                        <span className="lib-item-title"><Icon name="folder" /> {displayName(f.name)}</span>
                         <span className="lib-item-sub">open →</span>
                       </button>
                     ))}
@@ -2324,7 +2325,7 @@ function FilesView(props: {
                           onClick={() => openFile(f.name)}
                           title={f.name}
                         >
-                          <span className="lib-item-title">{KIND_META[fileKind(f.name)].icon} {displayName(f.name)}</span>
+                          <span className="lib-item-title"><Icon name={KIND_META[fileKind(f.name)].icon} /> {displayName(f.name)}</span>
                           <span className="lib-item-sub">{timeAgo(f.modified)}</span>
                         </button>
                       ))}
@@ -2347,7 +2348,7 @@ function FilesView(props: {
           ) : (
             folders.map((f) => (
               <div key={f.path} className={`lib-item connected ${f.exists ? "" : "missing"}`}>
-                <span className="lib-item-title" title={f.path}>💻 {f.name}{f.exists ? "" : " (missing)"}</span>
+                <span className="lib-item-title" title={f.path}><Icon name="laptop" /> {f.name}{f.exists ? "" : " (missing)"}</span>
                 <span className="conn-actions">
                   <button className="link-btn" title="Open in file manager" onClick={() => openPath(f.path).catch(() => {})}>open</button>
                   <button className="link-btn danger" title="Disconnect" onClick={() => disconnectFolder(f.path)}>✕</button>
@@ -2367,7 +2368,7 @@ function FilesView(props: {
           ) : (
             <>
               <div className="file-head">
-                <span className="file-name" title={selName}>{meta.icon} {displayName(selName)}</span>
+                <span className="file-name" title={selName}><Icon name={meta.icon} /> {displayName(selName)}</span>
                 <div className="spacer" />
                 <button className={`btn ghost sm ${!editing ? "seg-active" : ""}`} onClick={() => setEditing(false)}>View</button>
                 <button className={`btn ghost sm ${editing ? "seg-active" : ""}`} onClick={() => setEditing(true)}>Edit</button>
@@ -2458,7 +2459,7 @@ function FilesView(props: {
       {connectPath && (
         <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setConnectPath(null); }}>
           <div className="modal" style={{ maxWidth: 460 }}>
-            <h2>⚠️ Connect this folder?</h2>
+            <h2><Icon name="warning" /> Connect this folder?</h2>
             <p className="hint" style={{ margin: "10px 0" }}>
               You're about to give your AI team access to:
             </p>
@@ -2594,7 +2595,7 @@ function LibraryView(props: { snap: Snapshot; notify: (t: string, e?: boolean) =
             className={`lib-item ${sel?.type === "mem" && sel.key === "shared" ? "active" : ""}`}
             onClick={() => select({ type: "mem", key: "shared" })}
           >
-            <span className="lib-item-title">🧠 Shared team memory</span>
+            <span className="lib-item-title"><Icon name="nodes" /> Shared team memory</span>
             <span className="lib-item-sub">{snap.memory.shared ? `${snap.memory.shared.length} chars` : "empty"}</span>
           </button>
           {snap.agents.map((a) => (
@@ -2683,6 +2684,15 @@ function templateDefaultChecked(t: TeamTemplate, taken: Set<string>): Set<string
   return new Set(t.agents.filter((a) => !taken.has(a.name.toLowerCase())).map((a) => a.name));
 }
 
+const TEMPLATE_ICONS: Record<string, IconName> = {
+  consulting: "recruit",
+  agency: "megaphone",
+  founder: "target",
+  sales: "chart",
+  backoffice: "building",
+  dev: "laptop",
+};
+
 function TemplateModal(props: {
   existing: Agent[];
   avail: Availability;
@@ -2764,7 +2774,7 @@ function TemplateModal(props: {
           <div className="radio-row">
             {TEMPLATES.map((t) => (
               <button key={t.key} className={`radio-card ${tplKey === t.key ? "selected" : ""}`} onClick={() => pickTemplate(t.key)}>
-                <div className="rc-title">{t.key === "business" ? "🏢" : "💻"} {t.label}</div>
+                <div className="rc-title"><Icon name={TEMPLATE_ICONS[t.key] ?? "building"} /> {t.label}</div>
                 <div className="rc-sub">{t.description}</div>
               </button>
             ))}
@@ -2960,11 +2970,11 @@ function AgentModal(props: {
           <label>Permissions</label>
           <div className="radio-row">
             <button className={`radio-card ${permission === "sandboxed" ? "selected" : ""}`} onClick={() => setPermission("sandboxed")}>
-              <div className="rc-title">🔒 Sandboxed</div>
+              <div className="rc-title"><Icon name="lock" /> Sandboxed</div>
               <div className="rc-sub">Files only in its own workspace folder; web access allowed</div>
             </button>
             <button className={`radio-card ${permission === "full" ? "selected" : ""}`} onClick={() => setPermission("full")}>
-              <div className="rc-title">⚡ Full access</div>
+              <div className="rc-title"><Icon name="bolt" /> Full access</div>
               <div className="rc-sub">Can run any command and touch any file on this {MACHINE}</div>
             </button>
           </div>
@@ -3509,16 +3519,16 @@ function SettingsModal(props: {
   const aiUp = BACKENDS.filter((b) => props.avail[b]);
   const paired = s.telegram_chat_id !== 0;
   const cards: {
-    icon: string; title: string; status: string; tone: "up" | "warn" | "";
+    icon: IconName; title: string; status: string; tone: "up" | "warn" | "";
     action?: string; onAction?: () => void;
   }[] = [
     {
-      icon: "💳", title: "Subscription",
+      icon: "card", title: "Subscription",
       status: licenseSummary(licStatus), tone: licStatus.active ? "up" : "warn",
       action: "Manage", onAction: () => setShowSub(true),
     },
     {
-      icon: "🤖", title: "AI models",
+      icon: "agent", title: "AI models",
       status: aiUp.length > 0
         ? `● ${aiUp.map((b) => BACKEND_LABEL[b]).join(", ")}`
         : "None connected yet — Built-in AI is one click away",
@@ -3526,26 +3536,26 @@ function SettingsModal(props: {
       action: "Set up", onAction: () => setShowConnectAI(true),
     },
     {
-      icon: "📧", title: "Email to tasks",
+      icon: "envelope", title: "Email to tasks",
       status: s.mail_enabled ? `● ${s.mail_user || "Connected"}` : "Off — turn incoming requests into task proposals",
       tone: s.mail_enabled ? "up" : "",
       action: s.mail_enabled ? "Manage" : "Connect", onAction: () => setShowConnectEmail(true),
     },
     {
-      icon: "📱", title: "Phone remote",
+      icon: "phone", title: "Phone remote",
       status: paired ? "● Paired — text your team via Telegram" : s.telegram_enabled ? "Waiting for pairing…" : "Off — send tasks from your phone",
       tone: paired ? "up" : s.telegram_enabled ? "warn" : "",
       action: s.telegram_enabled ? "Manage" : "Set up", onAction: () => setShowTelegram(true),
     },
     {
-      icon: "📅", title: "Calendar",
+      icon: "calendar", title: "Calendar",
       status: IS_MAC
         ? "● Built in — agents read your Mac Calendar and can book events"
         : "Agents are date-aware today — Windows calendar integration is coming",
       tone: IS_MAC ? "up" : "",
     },
     {
-      icon: "🎨", title: "Deck branding",
+      icon: "palette", title: "Deck branding",
       status: s.brand_accent || s.brand_text ? `● Custom — accent ${s.brand_accent || "default"}` : "Qivreno Blue (default)",
       tone: s.brand_accent || s.brand_text ? "up" : "",
       action: "Customize", onAction: () => setShowBrand(true),
@@ -3559,7 +3569,7 @@ function SettingsModal(props: {
         <div className="settings-cards">
           {cards.map((c) => (
             <div key={c.title} className="setting-card">
-              <div className="sc-icon">{c.icon}</div>
+              <div className="sc-icon"><Icon name={c.icon} /></div>
               <div className="sc-body">
                 <div className="sc-title">{c.title}</div>
                 <div className={`sc-status ${c.tone}`}>{c.status}</div>

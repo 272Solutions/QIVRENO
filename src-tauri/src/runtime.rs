@@ -49,9 +49,9 @@ pub fn license_ok(state: &AppState) -> Result<(), String> {
     if status.active {
         Ok(())
     } else if status.state == "trial_expired" {
-        Err("your free trial has ended — enter a license key in Settings (⚙) to keep your agents working".into())
+        Err("your free trial has ended — enter a license key in Settings to keep your agents working".into())
     } else {
-        Err("your Qivreno subscription has expired — enter a renewed license key in Settings (⚙)".into())
+        Err("your Qivreno subscription has expired — enter a renewed license key in Settings".into())
     }
 }
 

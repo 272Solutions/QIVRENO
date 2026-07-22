@@ -50,6 +50,16 @@
 /* The lockup asset is pure white; flip it dark on the light sidebar. */
 :root[data-theme="light"] .brand-lockup { filter: invert(0.85); }
 
+/* Wireframe icon set (src/Icon.tsx): stroke follows currentColor, so icons
+   inherit the surrounding text color in both themes. Baseline-align when
+   inline with text; brand-accent where the icon is the focal element. */
+.wf-icon { vertical-align: -0.15em; flex-shrink: 0; }
+button > .wf-icon, h2 > .wf-icon { margin-right: 4px; }
+.nav-item .icon .wf-icon { vertical-align: -0.18em; }
+.gs-pick-icon .wf-icon, .sc-icon .wf-icon { color: var(--accent); }
+.kcard-needs-tag .wf-icon, .input-request-head .wf-icon { vertical-align: -0.18em; }
+.act-ico .wf-icon { color: var(--text-dim); vertical-align: -0.18em; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
 body { background: var(--bg); overflow: hidden; }
