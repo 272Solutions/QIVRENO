@@ -32,6 +32,10 @@ pub struct Agent {
     pub id: String,
     pub name: String,
     pub role: String,
+    /// Short, friendly one-liner shown to the user on profiles and pickers.
+    /// The full `skills` text is the working prompt material, not UI copy.
+    #[serde(default)]
+    pub description: String,
     pub skills: String,
     pub backend: BackendKind,
     /// Model name: an Ollama tag for ollama agents, an optional model alias
@@ -104,6 +108,14 @@ pub struct Task {
     pub result: String,
     #[serde(default)]
     pub log: Vec<String>,
+    /// Shared-folder files this run created or changed (paths relative to the
+    /// Shared root), so the UI can link straight to the deliverables.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// When the current (or last) run actually started — tighter window than
+    /// created_at for attributing Shared-file changes to this run.
+    #[serde(default)]
+    pub started_at: u64,
     /// Agent-to-agent chain depth; runs triggered past max_hops are not auto-continued.
     #[serde(default)]
     pub hop: u32,

@@ -484,6 +484,8 @@ pub async fn check_availability(app: AppHandle) -> Availability {
 pub struct AgentInput {
     pub name: String,
     pub role: String,
+    #[serde(default)]
+    pub description: String,
     pub skills: String,
     pub backend: BackendKind,
     #[serde(default)]
@@ -546,6 +548,7 @@ pub fn create_agent_core(app: &AppHandle, input: AgentInput) -> Result<Agent, St
         id: Uuid::new_v4().to_string(),
         name,
         role: input.role.trim().to_string(),
+        description: input.description.trim().to_string(),
         skills: input.skills.trim().to_string(),
         backend: input.backend,
         model: input.model.trim().to_string(),
@@ -701,6 +704,8 @@ pub fn create_task(
         input_request: String::new(),
         result: String::new(),
         log: vec![],
+        files: vec![],
+        started_at: 0,
         hop: 0,
         created_at: now_ms(),
         updated_at: now_ms(),

@@ -138,6 +138,7 @@ fn handle(app: &AppHandle, method: &str, path: &str, body: &str) -> (u16, Value)
             let input = crate::commands::AgentInput {
                 name: v["name"].as_str().unwrap_or_default().to_string(),
                 role: v["role"].as_str().unwrap_or_default().to_string(),
+                description: v["description"].as_str().unwrap_or_default().to_string(),
                 skills: v["skills"].as_str().unwrap_or_default().to_string(),
                 backend: sender.backend,
                 model: sender.model.clone(),

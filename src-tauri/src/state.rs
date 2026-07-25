@@ -42,7 +42,7 @@ impl AppState {
         let mut tasks: Vec<Task> = load_vec(&data_dir.join("tasks.json"));
         // Anything that was mid-flight when the app quit is stale.
         for t in tasks.iter_mut() {
-            if t.status == "running" || t.status == "routing" {
+            if t.status == "running" || t.status == "routing" || t.status == "queued" {
                 t.status = "failed".to_string();
                 t.log.push("interrupted: app was closed while task was running".into());
             }

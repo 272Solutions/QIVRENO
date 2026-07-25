@@ -6,7 +6,7 @@ import {
   Agent, AGENT_COLORS, agentTemplateGroups, Availability, BackendKind,
   BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, ConnectedFolder,
   displayName, Doc, fileKind, LicenseStatus, MAX_AGENTS, Permission, Settings,
-  SharedFile, Snapshot, Task, TeamTemplate, TEMPLATES,
+  SharedFile, skillsSummary, Snapshot, Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
 import { Icon, IconName } from "./Icon";
@@ -542,6 +542,7 @@ export default function App() {
           input: {
             name: CONCIERGE.name,
             role: CONCIERGE.role,
+            description: CONCIERGE.description,
             skills: CONCIERGE.skills,
             backend,
             model: localModelsFor(backend, avail)?.[0] ?? "",
@@ -618,6 +619,7 @@ export default function App() {
               key={a.id}
               className={`agent-item ${view.kind === "agent" && view.id === a.id ? "active" : ""}`}
               style={a.enabled === false ? { opacity: 0.45 } : undefined}
+              title={a.description || undefined}
               onClick={() => setView({ kind: "agent", id: a.id })}
             >
               <span className={`agent-dot ${workingAgents.has(a.id) ? "working" : ""}`} style={{ background: a.color, color: a.color }} />
@@ -991,10 +993,10 @@ function GetStartedModal(props: {
 }
 
 const OUTCOMES: { icon: IconName; label: string; prompt: string }[] = [
-  { icon: "doc", label: "Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a polished document in Shared/." },
+  { icon: "doc", label: "Create a sales proposal", prompt: "Create a sales proposal for [customer name]. What they need: [one sentence]. Include our relevant offerings, pricing approach, timeline, and next steps. Deliver it as a complete, client-ready proposal document in Shared/ — full prose I could send as-is, not an outline." },
   { icon: "search", label: "Research a prospect", prompt: "Research [company name] before my meeting on [date]. I need: company background, what they likely care about right now, talking points for us, and questions to ask. Deliver a one-page brief to Shared/." },
-  { icon: "megaphone", label: "Develop a marketing plan", prompt: "Develop a 30-day marketing plan for [product/service]. Include the channel mix, a content calendar, three sample posts in our brand voice, and how we'll measure it. Deliver to Shared/." },
-  { icon: "deck", label: "Build a presentation", prompt: "Build a presentation about [topic] for [audience]. Roughly 8 slides: the story, supporting numbers, and a clear ask at the end. Deliver as a deck in Shared/ so I can export it to PowerPoint." },
+  { icon: "megaphone", label: "Develop a marketing plan", prompt: "Develop a 30-day marketing plan for [product/service]. Include the channel mix with budget/effort allocation, a week-by-week content calendar, three sample posts in our brand voice, and measurable targets with how we'll track them. Make it a complete plan I could hand to a new marketing hire — not an outline. Deliver to Shared/." },
+  { icon: "deck", label: "Build a presentation", prompt: "Build a presentation about [topic] for [audience]. 10-12 substantive slides with speaker notes: the story, supporting numbers, and a clear ask at the end. Deliver as a deck in Shared/ so I can export it to PowerPoint." },
   { icon: "book", label: "Document a process", prompt: "Document how we [process, e.g. onboard a new client] as a numbered, repeatable process anyone on the team could follow. Ask me what you need to know, then save it to the Library." },
   { icon: "nodes", label: "Plan a project", prompt: "Plan the project: [what you want done]. Break it into workstreams with owners, sequence and dependencies, risks, and a timeline. If it spans several specialties, split it into subtasks for the team." },
   { icon: "chart", label: "Analyze a spreadsheet", prompt: "Analyze the spreadsheet [drop it in Shared/ first, then name it here]. I want the trends, anything unusual, and a short memo with the three decisions the numbers suggest. Deliver analysis and memo to Shared/." },
@@ -1177,6 +1179,21 @@ function KanbanBoard(props: {
                         {t.status === "done" && t.result && (
                           <div className="kcard-snippet">{t.result.replace(/[#*`>-]/g, "").slice(0, 110)}</div>
                         )}
+                        {(col.key === "review" || col.key === "done") && (t.files ?? []).length > 0 && (
+                          <div className="kcard-files">
+                            {t.files.slice(0, 3).map((f) => (
+                              <button
+                                key={f}
+                                className="file-chip sm"
+                                title={`Open ${f}`}
+                                onClick={(e) => { e.stopPropagation(); props.onOpenFile(f); }}
+                              >
+                                <Icon name="doc" /> {displayName(f)}
+                              </button>
+                            ))}
+                            {t.files.length > 3 && <span className="kcard-files-more">+{t.files.length - 3} more</span>}
+                          </div>
+                        )}
                         <div className="kcard-meta">
                           {agent ? (
                             <span className="agent-chip"><i style={{ background: agent.color }} /> {agent.name}</span>
@@ -1305,7 +1322,7 @@ function TaskDetailModal(props: {
   const { task, agent, notify } = props;
   const active = ["routing", "queued", "running"].includes(task.status);
   const actions = task.log.map(prettyAction);
-  const files = [...new Set(actions.filter((a) => a.file).map((a) => a.file!))];
+  const files = [...new Set([...(task.files ?? []), ...actions.filter((a) => a.file).map((a) => a.file!)])];
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal wide">
@@ -1512,7 +1529,15 @@ function AgentView(props: {
           <div className="profile-info">
             <div className="profile-name">{agent.name}</div>
             <div className="profile-role">{agent.role}</div>
-            {agent.skills && <div className="profile-skills">{agent.skills}</div>}
+            {(agent.description || agent.skills) && (
+              <div className="profile-skills">{agent.description || skillsSummary(agent.skills)}</div>
+            )}
+            {agent.skills && (
+              <details className="profile-skills-full">
+                <summary>Full skills & working instructions</summary>
+                <div>{agent.skills}</div>
+              </details>
+            )}
             <div className="tags">
               <span className="tag">{BACKEND_LABEL[agent.backend]}{agent.model ? ` · ${agent.model}` : ""}</span>
               {agent.permission === "full"
@@ -2803,6 +2828,7 @@ function TemplateModal(props: {
           input: {
             name: a.name,
             role: a.role,
+            description: a.description,
             skills: a.skills,
             backend,
             model: localModels ? model : "",
@@ -2858,7 +2884,7 @@ function TemplateModal(props: {
                   <span className="agent-dot" style={{ background: a.color }} />
                   <span style={{ minWidth: 0 }}>
                     <div className="agent-item-name">{a.name} <span className="tpl-role">— {a.role}{taken ? " (already on team)" : ""}</span></div>
-                    <div className="tpl-skills">{a.skills}</div>
+                    <div className="tpl-skills">{a.description || a.skills}</div>
                   </span>
                 </label>
               );
@@ -2910,6 +2936,7 @@ function AgentModal(props: {
   const { agent, avail, notify } = props;
   const [name, setName] = useState(agent?.name ?? "");
   const [role, setRole] = useState(agent?.role ?? "");
+  const [description, setDescription] = useState(agent?.description ?? "");
   const [skills, setSkills] = useState(agent?.skills ?? "");
   const [backend, setBackend] = useState<BackendKind>(agent?.backend ?? firstAvailableBackend(avail));
   const [model, setModel] = useState(agent?.model ?? "");
@@ -2929,7 +2956,7 @@ function AgentModal(props: {
     setSaving(true);
     try {
       const payload = {
-        name, role, skills, backend,
+        name, role, description, skills, backend,
         model: backend === "codex" || backend === "builtin" ? "" : model,
         permission, color,
       };
@@ -2963,6 +2990,7 @@ function AgentModal(props: {
                 if (tpl) {
                   setName(tpl.name);
                   setRole(tpl.role);
+                  setDescription(tpl.description);
                   setSkills(tpl.skills);
                   setColor(tpl.color);
                 }
@@ -2986,6 +3014,15 @@ function AgentModal(props: {
         <div className="field">
           <label>Role</label>
           <input type="text" value={role} placeholder="e.g. Marketing Manager" onChange={(e) => setRole(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Description (shown on the agent's profile)</label>
+          <input
+            type="text"
+            value={description}
+            placeholder="One friendly line about what this agent does for you"
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
         <div className="field">
           <label>Skills & responsibilities</label>

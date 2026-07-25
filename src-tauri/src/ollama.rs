@@ -214,6 +214,7 @@ pub(crate) fn exec_tool(
             let input = crate::commands::AgentInput {
                 name: args["name"].as_str().unwrap_or_default().to_string(),
                 role: args["role"].as_str().unwrap_or_default().to_string(),
+                description: String::new(),
                 skills: args["skills"].as_str().unwrap_or_default().to_string(),
                 backend: agent.backend,
                 model: agent.model.clone(),

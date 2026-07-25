@@ -92,6 +92,8 @@ pub fn submit_task(
         input_request: String::new(),
         result: String::new(),
         log: vec![],
+        files: vec![],
+        started_at: 0,
         hop,
         created_at: now_ms(),
         updated_at: now_ms(),
@@ -280,6 +282,8 @@ pub fn propose_task(app: &AppHandle, title: &str, prompt: &str, question: &str) 
         input_request: question.to_string(),
         result: String::new(),
         log: vec!["proposed automatically — waiting for operator approval".into()],
+        files: vec![],
+        started_at: 0,
         hop: 0,
         created_at: now_ms(),
         updated_at: now_ms(),
@@ -309,7 +313,8 @@ pub fn ensure_qivvy(app: &AppHandle) {
             id: Uuid::new_v4().to_string(),
             name: "Qivvy".into(),
             role: "Project Manager".into(),
-            skills: "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication".into(),
+            description: "Your project manager — takes big requests, splits them into tasks for the right teammates, and pulls everything together into one finished deliverable.".into(),
+            skills: "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication; deliverable standard: before accepting any subtask result, checks it against the delegation brief's acceptance criteria and rejects and re-delegates anything that is an outline, stub or bullet sketch rather than finished client-ready work — the integrated final package must read as one complete, polished deliverable the operator could hand to a client unchanged".into(),
             backend: crate::models::BackendKind::Builtin,
             model: String::new(),
             permission: crate::models::Permission::Sandboxed,
@@ -456,6 +461,7 @@ pub fn schedule(app: &AppHandle) {
             if busy.insert(agent_id) {
                 if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
                     t.status = "running".into();
+                    t.started_at = now_ms();
                     t.updated_at = now_ms();
                 }
                 to_start.push(task_id);
@@ -469,7 +475,19 @@ pub fn schedule(app: &AppHandle) {
     emit_changed(app);
     for task_id in to_start {
         let app2 = app.clone();
-        std::thread::spawn(move || run_task(app2, task_id));
+        std::thread::spawn(move || {
+            // A panic anywhere in the run must never leave the task stuck in
+            // "running" (which also wedges the agent forever) — catch it and
+            // finalize as a failure the operator can re-run.
+            let app3 = app2.clone();
+            let tid = task_id.clone();
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                run_task(app2, task_id)
+            }));
+            if outcome.is_err() {
+                finalize(&app3, &tid, Err("the run crashed unexpectedly — re-run the task".into()));
+            }
+        });
     }
 }
 
@@ -532,6 +550,17 @@ fn run_task(app: AppHandle, task_id: String) {
         other => other,
     };
 
+    // Quality second pass: expand any thin document deliverables to full
+    // depth before the run is reported and reviewed.
+    if let Ok(result) = &outcome {
+        if !result.starts_with(AWAIT_INPUT)
+            && matches!(task.kind.as_str(), "task" | "chat")
+            && !state.cancelled.lock().unwrap().contains(&task_id)
+        {
+            refine_deliverables(&app, &task_id, &agent, &settings);
+        }
+    }
+
     // Board tasks must arrive in Review with a substantive report. If the
     // agent's own wrap-up is thin, compose one from the evidence (log +
     // the actual files it wrote) using whatever local model is available.
@@ -550,6 +579,256 @@ fn run_task(app: AppHandle, task_id: String) {
         other => other,
     };
     finalize(&app, &task_id, outcome);
+}
+
+/// Shared file names a task's log shows it wrote via the write_file tool.
+fn logged_shared_writes(log: &[String]) -> Vec<String> {
+    let mut files: Vec<String> = vec![];
+    for line in log {
+        if let Some(rest) = line.strip_prefix("tool: write_file ") {
+            if let Some(p) = rest.find("\"path\":\"Shared/") {
+                let start = p + 15;
+                if let Some(end) = rest[start..].find('"') {
+                    let name = rest[start..start + end].to_string();
+                    if !files.contains(&name) {
+                        files.push(name);
+                    }
+                }
+            }
+        }
+    }
+    files
+}
+
+/// Shared-folder files this run created or changed, as paths relative to the
+/// Shared root. Two sources: `write_file` lines in the task log (built-in tool
+/// loop, catches subfolder paths), and a scan of the Shared tree for anything
+/// modified since the run started (CLI agents write files directly, so the
+/// log never sees them). Files that another overlapping run logged writing
+/// are excluded — concurrent tasks must not claim each other's deliverables.
+pub fn deliverable_files(state: &AppState, task: &Task) -> Vec<String> {
+    let mut files = logged_shared_writes(&task.log);
+    let since = if task.started_at > 0 { task.started_at } else { task.created_at };
+    let foreign: std::collections::HashSet<String> = {
+        let tasks = state.tasks.lock().unwrap();
+        tasks
+            .iter()
+            .filter(|t| t.id != task.id && t.updated_at >= since)
+            .flat_map(|t| logged_shared_writes(&t.log))
+            .filter(|f| !files.contains(f))
+            .collect()
+    };
+    fn scan(dir: &std::path::Path, rel: &str, since: u64, depth: u8, files: &mut Vec<String>) {
+        if depth > 3 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            let child_rel = if rel.is_empty() { name } else { format!("{rel}/{name}") };
+            let path = entry.path();
+            if path.is_dir() {
+                scan(&path, &child_rel, since, depth + 1, files);
+            } else if path.is_file() {
+                let modified_ms = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                if modified_ms >= since && !files.contains(&child_rel) {
+                    files.push(child_rel);
+                }
+            }
+        }
+    }
+    scan(&state.shared_dir(), "", since, 0, &mut files);
+    files.retain(|f| !foreign.contains(f));
+    files
+}
+
+/// One-shot chat completion against an OpenAI-compatible endpoint, with an
+/// optional bearer key and a generous timeout (full-document rewrites are slow
+/// on local models).
+fn chat_completion(base_url: &str, model: &str, key: Option<&str>, prompt: &str) -> Option<String> {
+    let mut req = ureq::post(&format!("{}/chat/completions", base_url.trim_end_matches('/')))
+        .timeout(std::time::Duration::from_secs(300));
+    if let Some(k) = key {
+        req = req.set("Authorization", &format!("Bearer {k}"));
+    }
+    let resp = req
+        .send_json(serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": false,
+        }))
+        .ok()?;
+    let v: serde_json::Value = resp.into_json().ok()?;
+    v["choices"][0]["message"]["content"].as_str().map(str::to_string)
+}
+
+/// Strongest single-shot completion available for this agent: its own backend
+/// for API/local kinds, otherwise the best local engine (CLI backends do
+/// full runs, not one-shot completions).
+fn single_completion(agent: &Agent, settings: &Settings, prompt: &str) -> Option<String> {
+    match agent.backend {
+        BackendKind::Ollama => {
+            let models = crate::detect::ollama_models(&settings.ollama_url);
+            let model = if !agent.model.is_empty() && models.contains(&agent.model) {
+                agent.model.clone()
+            } else {
+                models.first()?.clone()
+            };
+            let resp = ureq::post(&format!("{}/api/chat", settings.ollama_url))
+                .timeout(std::time::Duration::from_secs(300))
+                .send_json(serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": false,
+                    "think": false,
+                }))
+                .ok()?;
+            let v: serde_json::Value = resp.into_json().ok()?;
+            v["message"]["content"].as_str().map(str::to_string)
+        }
+        BackendKind::Lmstudio => chat_completion(&settings.lmstudio_url, &agent.model, None, prompt),
+        BackendKind::Gemini => {
+            let key = settings.gemini_api_key.trim();
+            if key.is_empty() {
+                return None;
+            }
+            let model = if agent.model.is_empty() { "gemini-2.5-flash" } else { &agent.model };
+            chat_completion(
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+                model,
+                Some(key),
+                prompt,
+            )
+        }
+        BackendKind::Grok => {
+            let key = settings.grok_api_key.trim();
+            if key.is_empty() {
+                return None;
+            }
+            let model = if agent.model.is_empty() { "grok-4-fast" } else { &agent.model };
+            chat_completion("https://api.x.ai/v1", model, Some(key), prompt)
+        }
+        BackendKind::Builtin | BackendKind::Claude | BackendKind::Codex => {
+            if settings.builtin_enabled && crate::builtin::is_healthy(settings) {
+                chat_completion(&crate::builtin::base_url(settings), "qwen3", None, prompt)
+            } else {
+                routing::ask_ollama(settings, prompt)
+            }
+        }
+    }
+}
+
+/// Drop a wrapping ``` fence if the model returned one around the document.
+fn strip_md_fence(s: &str) -> &str {
+    let t = s.trim();
+    if t.starts_with("```") && t.ends_with("```") {
+        if let Some(first_nl) = t.find('\n') {
+            let inner = &t[first_nl + 1..t.len() - 3];
+            return inner.trim();
+        }
+    }
+    t
+}
+
+/// Quality second pass: any .md/.txt deliverable this run wrote that is too
+/// thin to be client-ready gets one full rewrite against the quality bar,
+/// using the strongest single-shot completion available for the agent. This
+/// is what turns a bullet-stub "strategy" into an actual document.
+fn refine_deliverables(app: &AppHandle, task_id: &str, agent: &Agent, settings: &Settings) {
+    const THIN_CHARS: usize = 5000; // ~800 words — under this a document is a stub
+    let state = app.state::<AppState>();
+    let Some(task) = state.tasks.lock().unwrap().iter().find(|t| t.id == task_id).cloned() else {
+        return;
+    };
+    let shared = state.shared_dir();
+    let profile = {
+        let docs = state.docs.lock().unwrap();
+        docs.iter()
+            .find(|d| d.title.eq_ignore_ascii_case("Business Profile"))
+            .map(|d| truncate(&d.content, 1500))
+            .unwrap_or_else(|| "(no business profile on file)".into())
+    };
+    let mut refined = 0;
+    // ONLY files this task's own log shows it wrote. Never rewrite a file on
+    // the strength of an mtime scan — with concurrent runs that rewrites a
+    // teammate's deliverable under this task's unrelated brief.
+    for rel in logged_shared_writes(&task.log) {
+        if refined >= 3 {
+            break;
+        }
+        let lower = rel.to_lowercase();
+        if !lower.ends_with(".md") && !lower.ends_with(".txt") {
+            continue;
+        }
+        let path = shared.join(&rel);
+        let Ok(content) = std::fs::read_to_string(&path) else { continue };
+        let draft = content.trim().to_string();
+        // Rewrite when the draft is thin, OR when it carries the failure
+        // modes small models leave behind: placeholder tokens and agent
+        // status sections inside what should be a client-facing document.
+        let defective = ["$X", "TBD", "[insert", "[INSERT", "XXX", "### What I did", "Needs your attention",
+                         "[Your", "[AUTO", "[Insert", "[Name", "[Date", "[Company",
+                         "write_file", "calendar_add_event", "Calendar_add_event"]
+            .iter()
+            .any(|m| draft.contains(m));
+        if draft.is_empty() || (draft.len() >= THIN_CHARS && !defective) {
+            continue;
+        }
+        log_task_line(app, task_id, &format!("quality pass: expanding {rel} into a full document…"));
+        let prompt = format!(
+            "You are {name}, the {role} on a small business's AI team. A draft deliverable you \
+             produced is below. It is too thin to hand to a paying client. Rewrite it into the \
+             COMPLETE, client-ready document the request deserves.\n\
+             Requirements:\n\
+             - Keep the topic, intent, and every correct fact and number from the draft; expand \
+             with full prose sections, concrete specifics (numbers, dates, names, steps), tables \
+             where they clarify, and a closing recommendation or next-steps section.\n\
+             - Cover every part a professional in your role would include for this kind of document.\n\
+             - At least 900 words, unless the request clearly calls for something shorter.\n\
+             - State assumptions inline (as estimates) rather than leaving gaps.\n\
+             - No placeholder tokens: never '$X', 'TBD', or unfilled brackets — commit to a \
+             realistic number and label it an estimate.\n\
+             - Numbers must reconcile: use the figures given in the request exactly, and make \
+             every computed figure consistent with them.\n\
+             - The document must contain ONLY the deliverable itself — no status sections like \
+             'What I did' or 'Needs your attention', no notes to the operator.\n\
+             - Output ONLY the finished document text in Markdown — no preamble, no commentary, \
+             no code fences.\n\n\
+             The operator's request:\n{req}\n\n\
+             Business context:\n{profile}\n\n\
+             Current draft of {rel}:\n{draft}",
+            name = agent.name,
+            role = agent.role,
+            req = truncate(&task.prompt, 1500),
+            draft = truncate(&draft, 8000),
+        );
+        let Some(out) = single_completion(agent, settings, &prompt) else { continue };
+        let out = crate::ollama::strip_thinking(&out);
+        let out = strip_md_fence(&out).to_string();
+        let meta = out.get(..40).unwrap_or(&out).to_lowercase();
+        // Accept only a real improvement, never meta commentary.
+        if out.len() > draft.len() * 3 / 2
+            && !meta.starts_with("i ")
+            && !meta.starts_with("here")
+            && !meta.starts_with("sure")
+        {
+            if std::fs::write(&path, format!("{}\n", out.trim())).is_ok() {
+                log_task_line(app, task_id, &format!("quality pass: rewrote {rel} to full depth"));
+                refined += 1;
+            }
+        } else {
+            log_task_line(app, task_id, &format!("quality pass: kept the original {rel}"));
+        }
+    }
 }
 
 /// Build a completion report from the task, its action log, and the content
@@ -576,50 +855,18 @@ fn compose_report(app: &AppHandle, task_id: &str, agent: &Agent, raw_result: &st
     // Attach the content of Shared files this run created, so the report can
     // describe the actual deliverables.
     let shared = state.shared_dir();
-    let mut written_files: Vec<String> = vec![];
+    let written_files: Vec<String> = deliverable_files(&state, &task)
+        .into_iter()
+        .map(|f| format!("Shared/{f}"))
+        .collect();
     let mut attached = 0;
-    for line in &task.log {
-        if let Some(rest) = line.strip_prefix("tool: write_file ") {
-            if let Some(p) = rest.find("\"path\":\"Shared/") {
-                let start = p + 15;
-                if let Some(end) = rest[start..].find('"') {
-                    let name = &rest[start..start + end];
-                    written_files.push(format!("Shared/{name}"));
-                    if let Ok(content) = std::fs::read_to_string(shared.join(name)) {
-                        ctx.push_str(&format!(
-                            "\nContent of Shared/{name}:\n{}\n",
-                            truncate(&content, 2500)
-                        ));
-                        attached += 1;
-                        if attached >= 3 {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // The log only sees the built-in tool loop; CLI agents (Claude/Codex)
-    // write Shared files directly. Catch those from the filesystem: anything
-    // modified since this task started counts as a deliverable of the run.
-    if let Ok(entries) = std::fs::read_dir(&shared) {
-        for entry in entries.flatten() {
-            if !entry.path().is_file() {
-                continue;
-            }
-            let modified_ms = entry
-                .metadata()
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-            if modified_ms >= task.created_at {
-                let rel = format!("Shared/{}", entry.file_name().to_string_lossy());
-                if !written_files.contains(&rel) {
-                    written_files.push(rel);
-                }
+    for rel in &written_files {
+        let name = rel.strip_prefix("Shared/").unwrap_or(rel);
+        if let Ok(content) = std::fs::read_to_string(shared.join(name)) {
+            ctx.push_str(&format!("\nContent of Shared/{name}:\n{}\n", truncate(&content, 2500)));
+            attached += 1;
+            if attached >= 3 {
+                break;
             }
         }
     }
@@ -881,6 +1128,62 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
          name rather than numbering it. Keep the extensions exactly as listed.\n\
          Teammates collaborate on these files — read a file before improving it, and mention the \
          exact file name when handing work to a teammate.\n",
+    );
+    p.push_str(
+        "\n=== Deliverable quality bar ===\n\
+         The operator is paying for finished professional work. Every deliverable must be complete \
+         and client-ready — the depth a seasoned professional in your role would hand a paying \
+         client, never a sketch of one:\n\
+         - Documents (.md) are finished pieces: a title, an executive summary, full prose sections \
+         with concrete specifics (real numbers, dates, names, steps, examples), tables where they \
+         clarify, and a closing recommendation or next-steps section. Bullets support prose — a \
+         page of bullet fragments is NOT a deliverable. A strategy, plan, report or policy should \
+         run at least 800-1500 words; if you cannot reach that with substance, you have not \
+         researched or thought enough yet.\n\
+         - Cover the entire ask. A request implies every part a professional would include: a \
+         marketing strategy needs situation analysis, audience/personas, positioning and message, \
+         channel plan, budget allocation, calendar, KPIs and measurement; a hiring plan needs \
+         roles, timeline, costs, sourcing and interview process; and so on for your domain. \
+         Missing an expected section means the work is not done.\n\
+         - Spreadsheets (.csv) contain real, complete rows of data or computations — never a \
+         header row with placeholders.\n\
+         - Presentations (.slides.json) have 8-14 substantive slides, each with 3-5 concrete \
+         bullets and speaker notes that add detail beyond the bullets.\n\
+         - Dashboards (.dash.json) show real values and data series, not sample numbers.\n\
+         - State your assumptions inside the deliverable instead of leaving gaps; use realistic \
+         estimates grounded in the business profile and say they are estimates.\n\
+         - Never leave placeholder tokens in a deliverable: no '$X', 'TBD', 'XXX' or unfilled \
+         [brackets] — commit to a realistic figure and label it an estimate.\n\
+         - Numbers must reconcile: when the request gives you figures, use them exactly, and make \
+         every number you compute consistent with the given ones — a document whose own numbers \
+         contradict each other is worse than no document.\n\
+         - Never invent citations. Do not attribute statistics to named firms or studies \
+         (Gartner, McKinsey, …) unless the request or library gave you that source — write \
+         evidence as reasoned estimates and label them as such.\n\
+         - Show your math and verify it: for every computed number write the formula, substitute \
+         the given values, and compute carefully. Then re-check that each derived figure agrees \
+         with the given inputs and with every other number in the document. State each total in \
+         ONE place only. If the document promises N items (five JHAs, three scenarios), deliver \
+         all N — never a sample.\n\
+         - Deliverable files contain ONLY the deliverable. Your completion report (What I did, \
+         Deliverables, …) is your FINAL MESSAGE, never file content — no status notes, meta \
+         commentary, or internal references inside a client-facing file.\n\
+         - When the request names a file (e.g. \"save as Shared/X.md\"), write the deliverable to \
+         EXACTLY that path with your file tool. save_process is only for documenting your own \
+         repeatable internal procedures in the Library — it is never where a requested \
+         deliverable goes.\n\
+         - Client-facing documents NEVER mention Qivreno, your AI teammates, or agent names as \
+         actors. Assign work in client documents to client roles (quality manager, logistics \
+         lead) or to '272 Solutions', never to teammates like 'the QE team' or 'Qivvy'.\n\
+         - Never expose internal plumbing in a deliverable: no tool names (write_file, \
+         calendar_add_event), no task or document ids, no references to this system.\n\
+         - Never invent named people. Do not attribute quotes or titles to named individuals at \
+         real organizations, and do not name executives of the operator's own business unless \
+         the business profile names them. Attribute quotes to a ROLE instead (e.g. 'said the \
+         company's founder') with a note that the real name goes in before publication.\n\
+         Before reporting done, reread each file and ask: would a demanding client accept this as \
+         finished work worth paying for? If not, expand and improve it first — that judgment is \
+         part of the task.\n",
     );
     if roster.is_empty() {
         p.push_str("\nYou currently have no teammate agents.\n");
@@ -1301,6 +1604,19 @@ fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
                     reply_ctx = Some((t.clone(), agent));
                 }
             }
+        }
+    }
+    // Record the run's deliverable files so the UI can link straight to them
+    // from the Review card and task detail.
+    let done_task = {
+        let tasks = state.tasks.lock().unwrap();
+        tasks.iter().find(|t| t.id == task_id && t.status == "done").cloned()
+    };
+    if let Some(t) = done_task {
+        let files = deliverable_files(&state, &t);
+        let mut tasks = state.tasks.lock().unwrap();
+        if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
+            t.files = files;
         }
     }
     state.save_tasks();
