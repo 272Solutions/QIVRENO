@@ -21,7 +21,11 @@ APP="$BUNDLE/macos/Qivreno.app"
 DMG="$BUNDLE/dmg/Qivreno_${VER}_aarch64.dmg"
 
 echo "== 1/6 build =="
-npm run tauri build >/dev/null 2>&1 || npm run tauri build
+# tauri's own dmg step needs Finder automation permission and fails in
+# non-interactive shells ("AppleEvent timed out"). Its dmg is discarded in
+# step 5 anyway, so tolerate that failure — only the .app must exist.
+npm run tauri build >/dev/null 2>&1 || true
+[ -d "$APP" ] || { echo "build failed: $APP missing"; npm run tauri build; exit 1; }
 
 echo "== 2/6 sign nested binaries (timestamp + hardened runtime) =="
 n=0
