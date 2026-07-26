@@ -822,6 +822,7 @@ pub fn update_settings(app: AppHandle, settings: Settings) -> Result<(), String>
     let state = app.state::<AppState>();
     *state.settings.lock().unwrap() = settings;
     state.save_settings();
+    crate::micro::sync(&app);
     runtime::emit_changed(&app);
     Ok(())
 }

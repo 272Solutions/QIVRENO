@@ -110,6 +110,39 @@ pub fn submit_task(
     Ok(task)
 }
 
+/// Last line of defense against stuck runs: any task still "running" well
+/// past the task timeout gets force-failed so its agent is freed and the
+/// operator can re-run it. (The stuck thread, if it ever returns, hits the
+/// already-finalized guard and is ignored.)
+pub fn start_watchdog(app: AppHandle) {
+    const GRACE_SECS: u64 = 300;
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        let state = app.state::<AppState>();
+        let stuck: Vec<String> = {
+            let tasks = state.tasks.lock().unwrap();
+            let now = now_ms();
+            tasks
+                .iter()
+                .filter(|t| {
+                    t.status == "running"
+                        && t.started_at > 0
+                        && now.saturating_sub(t.started_at) > (TASK_TIMEOUT_SECS + GRACE_SECS) * 1000
+                })
+                .map(|t| t.id.clone())
+                .collect()
+        };
+        for id in stuck {
+            log_task_line(&app, &id, "watchdog: run exceeded its time limit and was stopped");
+            finalize(
+                &app,
+                &id,
+                Err("the run stalled past its time limit and was stopped — re-run the task".into()),
+            );
+        }
+    });
+}
+
 /// Pick the best-fit agent for an unassigned task on a background thread,
 /// then enqueue it.
 pub fn start_routing(app: &AppHandle, task_id: String) {
@@ -314,7 +347,7 @@ pub fn ensure_qivvy(app: &AppHandle) {
             name: "Qivvy".into(),
             role: "Project Manager".into(),
             description: "Your project manager — takes big requests, splits them into tasks for the right teammates, and pulls everything together into one finished deliverable.".into(),
-            skills: "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication; deliverable standard: before accepting any subtask result, checks it against the delegation brief's acceptance criteria and rejects and re-delegates anything that is an outline, stub or bullet sketch rather than finished client-ready work — the integrated final package must read as one complete, polished deliverable the operator could hand to a client unchanged".into(),
+            skills: "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; scope definition, work breakdown structures, scheduling and sequencing, dependency and risk tracking, status reporting, stakeholder communication; deliverable standard: before accepting any subtask result, checks it against the delegation brief's acceptance criteria and rejects and re-delegates anything that is an outline, stub or bullet sketch rather than finished client-ready work — the integrated final package must read as one complete, polished deliverable the operator could hand to a client unchanged; once the LAST subtask result returns, personally assembles the integrated final package as an actual file in Shared (using the exact file name the operator requested) — a summary message is never a substitute for the assembled deliverable".into(),
             backend: crate::models::BackendKind::Builtin,
             model: String::new(),
             permission: crate::models::Permission::Sandboxed,
@@ -1517,6 +1550,16 @@ fn tail(s: &str, n: usize) -> String {
 
 fn finalize(app: &AppHandle, task_id: &str, outcome: Result<String, String>) {
     let state = app.state::<AppState>();
+    // A task can only be finalized once: if the watchdog (or a cancel) already
+    // closed it, a late-returning stuck thread must not overwrite that state.
+    {
+        let tasks = state.tasks.lock().unwrap();
+        if let Some(t) = tasks.iter().find(|t| t.id == task_id) {
+            if matches!(t.status.as_str(), "done" | "failed" | "cancelled") {
+                return;
+            }
+        }
+    }
     let was_cancelled = state.cancelled.lock().unwrap().remove(task_id);
     let mut reply_ctx: Option<(Task, Agent)> = None;
     // request_input pause: park the task instead of completing it. The

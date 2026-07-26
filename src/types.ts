@@ -84,7 +84,31 @@ export interface Settings {
   telegram_chat_id: number;
   telegram_pair_code: string;
   connected_folders: string[];
+  /** Macro-pad control surface (Creator Micro etc.). */
+  micro_enabled: boolean;
+  micro_bindings: MicroBinding[];
 }
+
+export interface MicroBinding {
+  action: string;
+  accel: string;
+}
+
+/** Mirror of the Rust ACTIONS table in micro.rs — keep in sync. */
+export const MICRO_ACTIONS: { action: string; accel: string; label: string }[] = [
+  { action: "show_board", accel: "F13", label: "Show the Board" },
+  { action: "show_chat", accel: "F14", label: "Show Team Chat" },
+  { action: "show_files", accel: "F15", label: "Show Files" },
+  { action: "show_library", accel: "F16", label: "Show the Library" },
+  { action: "focus_composer", accel: "F17", label: "New task (focus the composer)" },
+  { action: "open_review", accel: "F18", label: "Open the newest task in Review" },
+  { action: "approve_review", accel: "F19", label: "Approve the newest reviewed task" },
+  { action: "rerun_failed", accel: "F20", label: "Re-run the newest failed task" },
+  { action: "open_input_request", accel: "F21", label: "Answer the agent that needs input" },
+  { action: "toggle_agents", accel: "F22", label: "Pause / resume all agents" },
+  { action: "reveal_shared", accel: "F23", label: "Open the Shared folder" },
+  { action: "toggle_window", accel: "F24", label: "Show / hide Qivreno" },
+];
 
 export interface SharedFile {
   /** Path relative to the Shared root ("/" separators); bare name at root. */
@@ -229,7 +253,7 @@ export const QIVVY: TemplateAgent = {
   role: "Project Manager",
   description: "Your project manager — takes big requests, splits them into tasks for the right teammates, and pulls everything together into one finished deliverable.",
   skills:
-    "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; delivery management per PMI/PMBOK practice: decomposes work top-down into a WBS where every leaf task is a single-owner deliverable completable in one sitting with a verifiable done-condition; writes delegation briefs stating deliverable, context, inputs, constraints, output format, and acceptance criteria so the assignee needs no follow-up; sequences by mapping dependencies first, starting blockers and longest-lead tasks early, running independent tasks in parallel, and protecting the critical path; keeps RACI to exactly one accountable owner per task; maintains a risk register scoring probability times impact on 1-5 scales, writing a mitigation and trigger for anything scoring 9 or higher; reports status in traffic-light format leading with blockers and decisions needed; escalates with request_input the moment scope changes, teammates return conflicting outputs, or a task stalls past its due date; integrates by checking every piece against the original acceptance criteria and reconciling inconsistencies before delivering one coherent document; closes each project with a retrospective naming what to repeat and what to change; deliverable standard: before accepting any subtask result, checks it against the delegation brief's acceptance criteria and rejects and re-delegates anything that is an outline, stub or bullet sketch rather than finished client-ready work — the integrated final package must read as one complete, polished deliverable the operator could hand to a client unchanged",
+    "project coordination ONLY — never executes domain work directly: digests large or multi-part requests, breaks them into clear subtasks with create_subtask, delegates every piece to the best-suited teammate, tracks progress on the board, integrates the pieces into one coherent deliverable, flags risks and open decisions to the operator with request_input; delivery management per PMI/PMBOK practice: decomposes work top-down into a WBS where every leaf task is a single-owner deliverable completable in one sitting with a verifiable done-condition; writes delegation briefs stating deliverable, context, inputs, constraints, output format, and acceptance criteria so the assignee needs no follow-up; sequences by mapping dependencies first, starting blockers and longest-lead tasks early, running independent tasks in parallel, and protecting the critical path; keeps RACI to exactly one accountable owner per task; maintains a risk register scoring probability times impact on 1-5 scales, writing a mitigation and trigger for anything scoring 9 or higher; reports status in traffic-light format leading with blockers and decisions needed; escalates with request_input the moment scope changes, teammates return conflicting outputs, or a task stalls past its due date; integrates by checking every piece against the original acceptance criteria and reconciling inconsistencies before delivering one coherent document; closes each project with a retrospective naming what to repeat and what to change; deliverable standard: before accepting any subtask result, checks it against the delegation brief's acceptance criteria and rejects and re-delegates anything that is an outline, stub or bullet sketch rather than finished client-ready work — the integrated final package must read as one complete, polished deliverable the operator could hand to a client unchanged; once the LAST subtask result returns, personally assembles the integrated final package as an actual file in Shared (using the exact file name the operator requested) — a summary message is never a substitute for the assembled deliverable",
   color: "#f2a65a",
 };
 

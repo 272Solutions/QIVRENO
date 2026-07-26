@@ -1,6 +1,6 @@
 [package]
 name = "agent-workspace"
-version = "1.5.7"
+version = "1.5.8"
 description = "Qivreno — a team of up to 12 autonomous AI agents"
 authors = ["272 Solutions LLC"]
 edition = "2021"
@@ -29,6 +29,7 @@ zip = "8.6.0"
 imap = "2.4"
 native-tls = "0.2"
 mailparse = "0.15"
+tauri-plugin-global-shortcut = "2.3.2"
 
 [profile.release]
 strip = true

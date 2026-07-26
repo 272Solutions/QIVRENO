@@ -255,6 +255,13 @@ pub struct Settings {
     /// these folders, alongside the built-in Shared folder.
     #[serde(default)]
     pub connected_folders: Vec<String>,
+    /// Macro-pad control surface (Creator Micro etc.): global shortcuts that
+    /// drive Qivreno from a programmable pad. Off by default.
+    #[serde(default)]
+    pub micro_enabled: bool,
+    /// Custom action→accelerator bindings; empty = the defaults (F13-F24).
+    #[serde(default)]
+    pub micro_bindings: Vec<crate::micro::MicroBinding>,
 }
 
 pub fn default_imap_port() -> u16 {
@@ -313,6 +320,8 @@ impl Default for Settings {
             telegram_chat_id: 0,
             telegram_pair_code: String::new(),
             connected_folders: Vec::new(),
+            micro_enabled: false,
+            micro_bindings: Vec::new(),
         }
     }
 }

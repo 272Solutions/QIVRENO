@@ -67,10 +67,18 @@ cal.events.push(ev);
 
 #[cfg(target_os = "macos")]
 fn run_osascript_jxa(script: &str) -> Result<String, String> {
-    let out = Command::new("osascript")
-        .args(["-l", "JavaScript", "-e", script])
-        .output()
-        .map_err(|e| format!("osascript failed to start: {e}"))?;
+    // Hard timeout: osascript blocks FOREVER if the Calendar automation
+    // permission prompt cannot be answered; that must fail, not wedge the
+    // agent's task thread (which froze the whole app before this guard).
+    let mut cmd = Command::new("osascript");
+    cmd.args(["-l", "JavaScript", "-e", script]);
+    let out = crate::platform::output_with_timeout(&mut cmd, std::time::Duration::from_secs(45))
+        .map_err(|e| {
+            format!(
+                "Calendar access {e} — if macOS is waiting on a permission prompt, approve \
+                 Qivreno under System Settings → Privacy & Security → Automation"
+            )
+        })?;
     let stderr = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
         if stderr.contains("not authorized") || stderr.contains("-1743") {

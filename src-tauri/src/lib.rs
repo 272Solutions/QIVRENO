@@ -7,6 +7,7 @@ mod detect;
 mod docx;
 mod export;
 mod mail;
+mod micro;
 mod pdf;
 mod platform;
 mod pptx;
@@ -54,6 +55,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             migrate_legacy_data(&data_dir);
@@ -68,6 +70,8 @@ pub fn run() {
             builtin::ensure_started(app.handle());
             activation::start_background_refresh(app.handle());
             runtime::ensure_qivvy(app.handle());
+            micro::sync(app.handle());
+            runtime::start_watchdog(app.handle().clone());
             mail::start_watcher(app.handle().clone());
             telegram::start_bot(app.handle().clone());
             Ok(())

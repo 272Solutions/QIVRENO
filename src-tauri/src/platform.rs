@@ -63,6 +63,46 @@ pub fn kill_stray_engines() {
 }
 
 /// Show a file (selected) or folder in the system file manager.
+/// Run a child process with a hard wall-clock timeout. A child that blocks
+/// forever (e.g. osascript stuck on an unanswerable TCC permission prompt)
+/// must never wedge the calling task thread — kill it and return an error.
+pub fn output_with_timeout(
+    cmd: &mut Command,
+    timeout: std::time::Duration,
+) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to start: {e}"))?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
+                if let Some(mut s) = child.stdout.take() {
+                    s.read_to_end(&mut stdout).ok();
+                }
+                if let Some(mut s) = child.stderr.take() {
+                    s.read_to_end(&mut stderr).ok();
+                }
+                return Ok(std::process::Output { status, stdout, stderr });
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    child.kill().ok();
+                    child.wait().ok();
+                    return Err(format!("timed out after {}s", timeout.as_secs()));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            Err(e) => return Err(format!("wait failed: {e}")),
+        }
+    }
+}
+
 pub fn reveal(path: &std::path::Path, is_file: bool) -> Result<(), String> {
     #[cfg(windows)]
     {

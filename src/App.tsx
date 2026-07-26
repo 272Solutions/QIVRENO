@@ -6,7 +6,7 @@ import {
   Agent, AGENT_COLORS, agentTemplateGroups, Availability, BackendKind,
   BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, ConnectedFolder,
   displayName, Doc, fileKind, LicenseStatus, MAX_AGENTS, Permission, Settings,
-  SharedFile, skillsSummary, Snapshot, Task, TeamTemplate, TEMPLATES,
+  MICRO_ACTIONS, SharedFile, skillsSummary, Snapshot, Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
 import { Icon, IconName } from "./Icon";
@@ -67,7 +67,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
     trial_started_at: 0, qivvy_seeded: false,
     mail_enabled: false, mail_host: "", mail_port: 993, mail_user: "", mail_password: "", mail_allowlist: "",
     telegram_enabled: false, telegram_token: "", telegram_chat_id: 0, telegram_pair_code: "",
-    connected_folders: [],
+    connected_folders: [], micro_enabled: false, micro_bindings: [],
   },
   license: { state: "trial", days_left: 14, plan: "trial", customer: "", expires_at: 0, active: true },
 };
@@ -496,10 +496,50 @@ export default function App() {
     return () => { un.then((f) => f()); clearInterval(iv); };
   }, [refresh, checkAvail]);
 
+
   const notify = useCallback((text: string, error = false) => {
     setToast({ text, error });
     setTimeout(() => setToast(null), 3500);
   }, []);
+
+  // Macro-pad control surface: shortcut presses arrive from Rust as events.
+  const snapRef = useRef<Snapshot | null>(null);
+  useEffect(() => { snapRef.current = snap; }, [snap]);
+  const [microOpenTask, setMicroOpenTask] = useState<string | null>(null);
+  useEffect(() => {
+    const unAction = listen<string>("micro-action", (e) => {
+      const action = e.payload;
+      const tasks = snapRef.current?.tasks ?? [];
+      switch (action) {
+        case "show_board": setView({ kind: "board" }); break;
+        case "show_chat": setView({ kind: "chatroom" }); break;
+        case "show_files": setView({ kind: "files" }); break;
+        case "show_library": setView({ kind: "library" }); break;
+        case "focus_composer":
+          setView({ kind: "board" });
+          setTimeout(() => document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(), 150);
+          break;
+        case "open_review": {
+          const t = tasks
+            .filter((t) => t.kind === "task" && t.column === "review" && t.status === "done")
+            .sort((a, b) => b.updated_at - a.updated_at)[0];
+          setView({ kind: "board" });
+          if (t) setMicroOpenTask(t.id);
+          break;
+        }
+        case "open_input_request": {
+          const t = tasks
+            .filter((t) => t.kind === "task" && t.column === "requires_input")
+            .sort((a, b) => b.updated_at - a.updated_at)[0];
+          setView({ kind: "board" });
+          if (t) setMicroOpenTask(t.id);
+          break;
+        }
+      }
+    });
+    const unToast = listen<string>("micro-toast", (e) => notify(e.payload));
+    return () => { unAction.then((f) => f()); unToast.then((f) => f()); };
+  }, [notify]);
 
   const workingAgents = useMemo(() => {
     const ids = new Set<string>();
@@ -673,6 +713,8 @@ export default function App() {
             onNewAgent={() => setEditingAgent("new")}
             onConcierge={startConcierge}
             onOpenFile={(name) => { setFilesFocus(name); setView({ kind: "files" }); }}
+            openTaskId={microOpenTask}
+            onOpenTaskConsumed={() => setMicroOpenTask(null)}
           />
         )}
         {view.kind === "activity" && <ActivityFeed snap={snap} nameOf={nameOf} colorOf={colorOf} />}
@@ -1011,12 +1053,22 @@ function KanbanBoard(props: {
   onNewAgent: () => void;
   onConcierge: () => void;
   onOpenFile: (name: string) => void;
+  openTaskId?: string | null;
+  onOpenTaskConsumed?: () => void;
 }) {
   const { snap, agentById, notify } = props;
   const [prompt, setPrompt] = useState("");
   const [assignee, setAssignee] = useState("auto");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<Column | null>(null);
+
+  // Macro-pad "open this task" requests arrive from the App level.
+  useEffect(() => {
+    if (props.openTaskId) {
+      setDetailId(props.openTaskId);
+      props.onOpenTaskConsumed?.();
+    }
+  }, [props.openTaskId]);
 
   const submit = async (draft: boolean) => {
     try {
@@ -3594,6 +3646,7 @@ function SettingsModal(props: {
   const [showConnectAI, setShowConnectAI] = useState(false);
   const [showTelegram, setShowTelegram] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
+  const [showMicro, setShowMicro] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
 
   // Wizards persist themselves; re-sync our draft when one closes so a later
@@ -3654,6 +3707,14 @@ function SettingsModal(props: {
       status: s.brand_accent || s.brand_text ? `● Custom — accent ${s.brand_accent || "default"}` : "Qivreno Blue (default)",
       tone: s.brand_accent || s.brand_text ? "up" : "",
       action: "Customize", onAction: () => setShowBrand(true),
+    },
+    {
+      icon: "bolt", title: "Macro pad",
+      status: s.micro_enabled
+        ? "● Global shortcuts active — Creator Micro ready"
+        : "Off — drive Qivreno from a Creator Micro or any macro pad",
+      tone: s.micro_enabled ? "up" : "",
+      action: "Configure", onAction: () => setShowMicro(true),
     },
   ];
 
@@ -3765,6 +3826,89 @@ function SettingsModal(props: {
           onClose={() => { setShowBrand(false); refresh(); }}
         />
       )}
+      {showMicro && (
+        <MicroModal
+          notify={props.notify}
+          onClose={() => { setShowMicro(false); refresh(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Macro-pad control surface: enable global shortcuts and map them. Saves
+ * immediately (like the other wizards) so the pad works without a restart. */
+function MicroModal(props: { notify: (t: string, e?: boolean) => void; onClose: () => void }) {
+  const [s, setS] = useState<Settings | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    invoke<Snapshot>("get_snapshot").then((sn) => {
+      const st = sn.settings;
+      if (!st.micro_bindings || st.micro_bindings.length === 0) {
+        st.micro_bindings = MICRO_ACTIONS.map((a) => ({ action: a.action, accel: a.accel }));
+      }
+      setS(st);
+    }).catch(() => {});
+  }, []);
+  if (!s) return null;
+  const labelOf = (action: string) => MICRO_ACTIONS.find((a) => a.action === action)?.label ?? action;
+  const save = async () => {
+    setSaving(true);
+    try {
+      await invoke("update_settings", { settings: s });
+      props.notify(s.micro_enabled ? "Macro pad shortcuts active" : "Macro pad shortcuts off");
+      props.onClose();
+    } catch (e) {
+      props.notify(String(e), true);
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal">
+        <h2><Icon name="bolt" /> Macro pad</h2>
+        <p className="hint" style={{ margin: "6px 0 12px" }}>
+          Drive Qivreno from a <b>Work Louder Creator Micro 2</b> or any programmable macro pad.
+          Qivreno listens for the global shortcuts below even while you work in another app — map
+          your pad's keys to them in the pad's configurator (Work Louder <b>Input</b>: create a
+          Qivreno layer, assign each key a shortcut from this list, and use <b>AppSense</b> to
+          auto-switch to that layer when Qivreno is focused). F13-F24 are safe defaults no other
+          app uses.
+        </p>
+        <label className="check-row" style={{ marginBottom: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.micro_enabled}
+            onChange={(e) => setS({ ...s, micro_enabled: e.target.checked })}
+          />
+          Enable global macro-pad shortcuts
+        </label>
+        <div className="micro-grid">
+          {s.micro_bindings.map((b, i) => (
+            <div className="micro-row" key={b.action}>
+              <span className="micro-label">{labelOf(b.action)}</span>
+              <input
+                type="text"
+                value={b.accel}
+                style={{ width: 110, textAlign: "center" }}
+                onChange={(e) => {
+                  const next = [...s.micro_bindings];
+                  next[i] = { ...b, accel: e.target.value };
+                  setS({ ...s, micro_bindings: next });
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          Accepts key names like F13 or combos like Cmd+Ctrl+Alt+1. Suggested pad layout: keys
+          1-12 → the twelve actions in order; dial press → Show / hide Qivreno.
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={props.onClose}>Cancel</button>
+          <button className="btn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
     </div>
   );
 }
