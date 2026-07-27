@@ -117,6 +117,45 @@ jobs:
           "AZURE_CLIENT_ID=$env:AZURE_CLIENT_ID"         >> $env:GITHUB_ENV
           "AZURE_CLIENT_SECRET=$env:AZURE_CLIENT_SECRET" >> $env:GITHUB_ENV
 
+      # The vendored llama.cpp engine ships as prebuilt Mach-O files with no
+      # signature. Tauri signs the .app but never re-signs nested binaries, so
+      # notarization rejects them ("not signed with a valid Developer ID
+      # certificate" / "signature does not include a secure timestamp").
+      # Sign them inside-out before the bundle is assembled. Mirrors the same
+      # step in sign-build.sh for local release builds.
+      - name: Sign bundled engine binaries (macOS, only when signing is configured)
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "No signing identity configured - skipping (build will not be notarized)."
+            exit 0
+          fi
+          dir=src-tauri/resources/llama
+          [ -d "$dir" ] || { echo "no engine resources at $dir"; exit 0; }
+          machos=()
+          for f in "$dir"/*; do
+            [ -f "$f" ] || continue
+            file "$f" | grep -q "Mach-O" && machos+=("$f")
+          done
+          echo "Signing ${#machos[@]} engine binaries"
+          # Libraries first, then executables, so each signature seals its deps.
+          for f in "${machos[@]}"; do
+            case "$f" in *.dylib) codesign --force --timestamp --options runtime \
+              --sign "$APPLE_SIGNING_IDENTITY" "$f" ;; esac
+          done
+          for f in "${machos[@]}"; do
+            case "$f" in *.dylib) ;; *) codesign --force --timestamp --options runtime \
+              --sign "$APPLE_SIGNING_IDENTITY" "$f" ;; esac
+          done
+          # Fail here rather than after a 10-minute notarization round trip.
+          for f in "${machos[@]}"; do
+            codesign -dvv "$f" 2>&1 | grep -q "Timestamp=" || {
+              echo "no secure timestamp on $f"; exit 1; }
+          done
+          echo "All engine binaries signed with secure timestamps."
+
       - name: Build app
         uses: tauri-apps/tauri-action@v0
         env:
