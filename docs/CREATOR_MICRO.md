@@ -23,19 +23,22 @@ Default bindings (editable in Settings → Macro pad → Configure):
 | F18 | Open the newest task in Review |
 | F19 | Approve the newest reviewed task |
 | F20 | Re-run the newest failed task |
-| F21 | Answer the agent that needs input |
-| F22 | Pause / resume all agents |
-| F23 | Open the Shared folder |
-| F24 | Show / hide Qivreno |
+| Cmd+Ctrl+Alt+Shift+1 | Answer the agent that needs input |
+| Cmd+Ctrl+Alt+Shift+2 | Pause / resume all agents |
+| Cmd+Ctrl+Alt+Shift+3 | Open the Shared folder |
+| Cmd+Ctrl+Alt+Shift+4 | Show / hide Qivreno |
 
-F13–F24 are used because no OS or mainstream app claims them.
+F13-F20 are used because no OS or mainstream app claims them. macOS has no
+scancode for F21-F24, so the last four actions use a "hyper" combo
+(Cmd+Ctrl+Alt+Shift) instead — every pad configurator can send those. Any
+shortcut that fails to register is reported in-app when you save.
 
 ## Creator Micro 2 setup
 
 1. In Qivreno: Settings → **Macro pad** → Configure → enable and Save.
 2. In Work Louder's **Input** configurator: create a "Qivreno" layer, map the
-   12 keys to F13–F24 (in the table's order — top-left key = F13), and map the
-   encoder press to F24 (show/hide).
+   12 keys to the accelerators in the table's order (top-left key = F13), and
+   map the encoder press to Cmd+Ctrl+Alt+Shift+4 (show/hide).
 3. Optional: use Input's **AppSense** to link the Qivreno layer to the Qivreno
    app, so the pad switches itself to agent control whenever Qivreno is
    focused, and back to your other layers elsewhere.

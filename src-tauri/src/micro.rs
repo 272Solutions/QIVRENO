@@ -10,8 +10,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-/// One controllable action with its default accelerator. Keys F13-F24 are
-/// the macropad convention: unused by the OS, easy to emit from any pad.
+/// One controllable action with its default accelerator. F13-F20 are the
+/// macropad convention (unused by the OS, easy to emit from any pad); macOS
+/// has no scancodes above F20, so the rest use hyper combos, which every
+/// pad configurator can send too.
 pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("show_board", "F13", "Show the Board"),
     ("show_chat", "F14", "Show Team Chat"),
@@ -21,10 +23,10 @@ pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("open_review", "F18", "Open the newest task in Review"),
     ("approve_review", "F19", "Approve the newest reviewed task"),
     ("rerun_failed", "F20", "Re-run the newest failed task"),
-    ("open_input_request", "F21", "Answer the agent that needs input"),
-    ("toggle_agents", "F22", "Pause / resume all agents"),
-    ("reveal_shared", "F23", "Open the Shared folder"),
-    ("toggle_window", "F24", "Show / hide Qivreno"),
+    ("open_input_request", "Cmd+Ctrl+Alt+Shift+1", "Answer the agent that needs input"),
+    ("toggle_agents", "Cmd+Ctrl+Alt+Shift+2", "Pause / resume all agents"),
+    ("reveal_shared", "Cmd+Ctrl+Alt+Shift+3", "Open the Shared folder"),
+    ("toggle_window", "Cmd+Ctrl+Alt+Shift+4", "Show / hide Qivreno"),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +58,7 @@ pub fn sync(app: &AppHandle) {
     } else {
         settings.micro_bindings.clone()
     };
+    let mut failed: Vec<String> = vec![];
     for b in bindings {
         if b.accel.trim().is_empty() {
             continue;
@@ -68,7 +71,20 @@ pub fn sync(app: &AppHandle) {
             }
         }) {
             eprintln!("micro: could not register {} for {}: {e}", b.accel, b.action);
+            failed.push(b.accel.clone());
         }
+    }
+    // A shortcut this system can't register must not fail silently — the
+    // operator would press a dead key and think the app was broken.
+    if !failed.is_empty() {
+        app.emit(
+            "micro-toast",
+            format!(
+                "Macro pad: {} could not be registered (already in use, or unsupported on this system)",
+                failed.join(", ")
+            ),
+        )
+        .ok();
     }
 }
 

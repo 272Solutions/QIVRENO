@@ -104,10 +104,10 @@ export const MICRO_ACTIONS: { action: string; accel: string; label: string }[] =
   { action: "open_review", accel: "F18", label: "Open the newest task in Review" },
   { action: "approve_review", accel: "F19", label: "Approve the newest reviewed task" },
   { action: "rerun_failed", accel: "F20", label: "Re-run the newest failed task" },
-  { action: "open_input_request", accel: "F21", label: "Answer the agent that needs input" },
-  { action: "toggle_agents", accel: "F22", label: "Pause / resume all agents" },
-  { action: "reveal_shared", accel: "F23", label: "Open the Shared folder" },
-  { action: "toggle_window", accel: "F24", label: "Show / hide Qivreno" },
+  { action: "open_input_request", accel: "Cmd+Ctrl+Alt+Shift+1", label: "Answer the agent that needs input" },
+  { action: "toggle_agents", accel: "Cmd+Ctrl+Alt+Shift+2", label: "Pause / resume all agents" },
+  { action: "reveal_shared", accel: "Cmd+Ctrl+Alt+Shift+3", label: "Open the Shared folder" },
+  { action: "toggle_window", accel: "Cmd+Ctrl+Alt+Shift+4", label: "Show / hide Qivreno" },
 ];
 
 export interface SharedFile {

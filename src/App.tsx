@@ -3872,8 +3872,8 @@ function MicroModal(props: { notify: (t: string, e?: boolean) => void; onClose: 
           Qivreno listens for the global shortcuts below even while you work in another app — map
           your pad's keys to them in the pad's configurator (Work Louder <b>Input</b>: create a
           Qivreno layer, assign each key a shortcut from this list, and use <b>AppSense</b> to
-          auto-switch to that layer when Qivreno is focused). F13-F24 are safe defaults no other
-          app uses.
+          auto-switch to that layer when Qivreno is focused). F13-F20 are safe defaults no other
+          app uses; macOS cannot register F21-F24, so those four actions use hyper combos.
         </p>
         <label className="check-row" style={{ marginBottom: 10 }}>
           <input
@@ -3901,8 +3901,9 @@ function MicroModal(props: { notify: (t: string, e?: boolean) => void; onClose: 
           ))}
         </div>
         <div className="hint" style={{ marginTop: 8 }}>
-          Accepts key names like F13 or combos like Cmd+Ctrl+Alt+1. Suggested pad layout: keys
-          1-12 → the twelve actions in order; dial press → Show / hide Qivreno.
+          Accepts key names like F13 (F13-F20 only on macOS) or combos like Cmd+Ctrl+Alt+Shift+1.
+          Suggested pad layout: keys 1-12 → the twelve actions in order; dial press → Show / hide
+          Qivreno. Anything that fails to register is reported as a notification when you save.
         </div>
         <div className="modal-actions">
           <button className="btn ghost" onClick={props.onClose}>Cancel</button>
