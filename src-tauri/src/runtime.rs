@@ -16,6 +16,15 @@ const TASK_TIMEOUT_SECS: u64 = 20 * 60;
 const SINGLE_COMPLETION_TIMEOUT_SECS: u64 = 300;
 /// How many of a task's own deliverables the quality pass will rewrite.
 const MAX_REFINE_FILES: usize = 3;
+/// How many Builtin-backend runs may be in flight at once. The built-in engine
+/// shares one KV cache across all its slots, so this is a context-budget
+/// division, not a thread-pool size — see builtin::SERVER_CTX_TOKENS. At least
+/// one, so a single run is never blocked.
+const MAX_CONCURRENT_BUILTIN_RUNS: usize =
+    match crate::builtin::SERVER_CTX_TOKENS / crate::builtin::PER_RUN_CTX_TOKENS {
+        0 => 1,
+        n => n,
+    };
 
 pub fn emit_changed(app: &AppHandle) {
     app.emit("changed", ()).ok();
@@ -502,6 +511,30 @@ pub fn schedule(app: &AppHandle) {
             .filter(|t| t.status == "running")
             .filter_map(|t| t.agent_id.clone())
             .collect();
+        // The built-in engine serves its slots from ONE shared KV cache
+        // (kv_unified), so concurrency is bounded by total context, not by slot
+        // count. An agent run is a multi-turn tool loop whose conversation grows
+        // with every tool call, so N simultaneous runs each grow until the pool
+        // is gone — and because the pool is shared, the overflow kills every
+        // in-flight run at once with "Context size has been exceeded" (HTTP
+        // 500), not just the greediest one. That is what made Qivvy's
+        // delegation fail: parent plus three subtasks started together and all
+        // four died. Admitting only as many local runs as the context budget
+        // supports keeps each one whole; the rest stay queued and start as
+        // slots free, which is also why splitting work into subtasks pays off.
+        let builtin_ids: HashSet<String> = {
+            let agents = state.agents.lock().unwrap();
+            agents
+                .iter()
+                .filter(|a| a.backend == BackendKind::Builtin)
+                .map(|a| a.id.clone())
+                .collect()
+        };
+        let mut builtin_running = tasks
+            .iter()
+            .filter(|t| t.status == "running")
+            .filter(|t| t.agent_id.as_deref().is_some_and(|id| builtin_ids.contains(id)))
+            .count();
         // Work from the user (chats, then board tasks) outranks
         // agent-to-agent message traffic; ties go to the oldest.
         let mut queued: Vec<(u8, u64, String, String)> = tasks
@@ -518,11 +551,18 @@ pub fn schedule(app: &AppHandle) {
             .collect();
         queued.sort();
         for (_, _, task_id, agent_id) in queued {
+            let is_builtin = builtin_ids.contains(&agent_id);
+            if is_builtin && builtin_running >= MAX_CONCURRENT_BUILTIN_RUNS {
+                continue; // stays queued; a later schedule() pass picks it up
+            }
             if busy.insert(agent_id) {
                 if let Some(t) = tasks.iter_mut().find(|t| t.id == task_id) {
                     t.status = "running".into();
                     t.started_at = now_ms();
                     t.updated_at = now_ms();
+                }
+                if is_builtin {
+                    builtin_running += 1;
                 }
                 to_start.push(task_id);
             }

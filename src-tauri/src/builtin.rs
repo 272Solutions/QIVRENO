@@ -186,6 +186,18 @@ fn download_model(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(final_path)
 }
 
+/// Total context the engine is started with. llama-server serves every slot
+/// from ONE shared KV cache (kv_unified), so this is the whole budget for all
+/// in-flight runs, not a per-run allowance. Real agent prompts measure ~5k
+/// tokens before any tool results, and a run's conversation grows with each
+/// tool call — at 8192 a single run could tip over and be rejected outright
+/// with HTTP 400. runtime::MAX_CONCURRENT_BUILTIN_RUNS divides this figure to
+/// decide how many local runs may be in flight at once; keep them together.
+pub const SERVER_CTX_TOKENS: usize = 16384;
+
+/// Context to reserve for one agent run's full tool loop.
+pub const PER_RUN_CTX_TOKENS: usize = 8192;
+
 fn spawn_server(app: &AppHandle, engine: &PathBuf, model: &PathBuf) -> Result<(), String> {
     let state = app.state::<AppState>();
     let port = state.settings.lock().unwrap().builtin_port;
@@ -202,15 +214,8 @@ fn spawn_server(app: &AppHandle, engine: &PathBuf, model: &PathBuf) -> Result<()
             "--port",
             &port.to_string(),
             "--jinja",
-            // Real agent prompts measure ~5k tokens once the preamble, roster,
-            // business profile and task text are assembled — at -c 8192 a run
-            // that accumulates a few tool results tips over the context limit
-            // and llama-server rejects the request outright with HTTP 400,
-            // failing the task. Doubling the window leaves room for the tool
-            // loop; the KV cache is shared across slots (kv_unified), so this
-            // costs one allocation, not one per slot.
             "-c",
-            "16384",
+            &SERVER_CTX_TOKENS.to_string(),
             "--no-webui",
         ])
         .stdout(Stdio::from(log.try_clone().map_err(|e| e.to_string())?))
