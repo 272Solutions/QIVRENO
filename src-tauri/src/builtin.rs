@@ -202,8 +202,15 @@ fn spawn_server(app: &AppHandle, engine: &PathBuf, model: &PathBuf) -> Result<()
             "--port",
             &port.to_string(),
             "--jinja",
+            // Real agent prompts measure ~5k tokens once the preamble, roster,
+            // business profile and task text are assembled — at -c 8192 a run
+            // that accumulates a few tool results tips over the context limit
+            // and llama-server rejects the request outright with HTTP 400,
+            // failing the task. Doubling the window leaves room for the tool
+            // loop; the KV cache is shared across slots (kv_unified), so this
+            // costs one allocation, not one per slot.
             "-c",
-            "8192",
+            "16384",
             "--no-webui",
         ])
         .stdout(Stdio::from(log.try_clone().map_err(|e| e.to_string())?))

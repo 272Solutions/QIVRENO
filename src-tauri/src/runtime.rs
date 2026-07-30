@@ -11,6 +11,11 @@ use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
 const TASK_TIMEOUT_SECS: u64 = 20 * 60;
+/// Per-call budget for the one-shot model calls used after a run finishes
+/// (document refinement and the review report). Full-document rewrites are slow.
+const SINGLE_COMPLETION_TIMEOUT_SECS: u64 = 300;
+/// How many of a task's own deliverables the quality pass will rewrite.
+const MAX_REFINE_FILES: usize = 3;
 
 pub fn emit_changed(app: &AppHandle) {
     app.emit("changed", ()).ok();
@@ -115,7 +120,21 @@ pub fn submit_task(
 /// operator can re-run it. (The stuck thread, if it ever returns, hits the
 /// already-finalized guard and is ignored.)
 pub fn start_watchdog(app: AppHandle) {
+    // This deadline is NOT a task-size allowance — work too big for one run is
+    // Qivvy's to split into subtasks, not something to grant more time. It
+    // exists because `started_at` measures the wrong interval: a run is not
+    // over when its backend returns. Qivreno then does its own post-processing
+    // on that thread — refine_deliverables rewrites up to MAX_REFINE_FILES
+    // documents and compose_report writes the review report, each a model call
+    // bounded by SINGLE_COMPLETION_TIMEOUT_SECS. That tail is the app's work,
+    // not the agent's, and it happens even for a small well-scoped subtask, so
+    // the deadline has to span it. Otherwise the watchdog force-fails a task
+    // that is still finishing and, because finalize() runs at most once, the
+    // completed report is discarded when the thread finally returns.
+    const POST_RUN_BUDGET_SECS: u64 =
+        (MAX_REFINE_FILES as u64 + 1) * SINGLE_COMPLETION_TIMEOUT_SECS;
     const GRACE_SECS: u64 = 300;
+    const DEADLINE_SECS: u64 = TASK_TIMEOUT_SECS + POST_RUN_BUDGET_SECS + GRACE_SECS;
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(60));
         let state = app.state::<AppState>();
@@ -127,12 +146,20 @@ pub fn start_watchdog(app: AppHandle) {
                 .filter(|t| {
                     t.status == "running"
                         && t.started_at > 0
-                        && now.saturating_sub(t.started_at) > (TASK_TIMEOUT_SECS + GRACE_SECS) * 1000
+                        && now.saturating_sub(t.started_at) > DEADLINE_SECS * 1000
                 })
                 .map(|t| t.id.clone())
                 .collect()
         };
         for id in stuck {
+            // Kill the child first. Without this the orphaned run keeps going
+            // against the same agent that schedule() is about to consider free
+            // (busy is derived from status == "running"), so one agent would be
+            // executing two tasks at once.
+            let pid = state.running_pids.lock().unwrap().remove(&id);
+            if let Some(pid) = pid {
+                crate::platform::kill_pid(pid);
+            }
             log_task_line(&app, &id, "watchdog: run exceeded its time limit and was stopped");
             finalize(
                 &app,
@@ -585,9 +612,12 @@ fn run_task(app: AppHandle, task_id: String) {
 
     // Quality second pass: expand any thin document deliverables to full
     // depth before the run is reported and reviewed.
+    // Board tasks only. A chat turn is a conversation, and running a
+    // full-document rewrite (up to MAX_REFINE_FILES model calls) before the
+    // reply is released left the operator waiting minutes for an answer.
     if let Ok(result) = &outcome {
         if !result.starts_with(AWAIT_INPUT)
-            && matches!(task.kind.as_str(), "task" | "chat")
+            && task.kind == "task"
             && !state.cancelled.lock().unwrap().contains(&task_id)
         {
             refine_deliverables(&app, &task_id, &agent, &settings);
@@ -689,7 +719,7 @@ pub fn deliverable_files(state: &AppState, task: &Task) -> Vec<String> {
 /// on local models).
 fn chat_completion(base_url: &str, model: &str, key: Option<&str>, prompt: &str) -> Option<String> {
     let mut req = ureq::post(&format!("{}/chat/completions", base_url.trim_end_matches('/')))
-        .timeout(std::time::Duration::from_secs(300));
+        .timeout(std::time::Duration::from_secs(SINGLE_COMPLETION_TIMEOUT_SECS));
     if let Some(k) = key {
         req = req.set("Authorization", &format!("Bearer {k}"));
     }
@@ -717,7 +747,7 @@ fn single_completion(agent: &Agent, settings: &Settings, prompt: &str) -> Option
                 models.first()?.clone()
             };
             let resp = ureq::post(&format!("{}/api/chat", settings.ollama_url))
-                .timeout(std::time::Duration::from_secs(300))
+                .timeout(std::time::Duration::from_secs(SINGLE_COMPLETION_TIMEOUT_SECS))
                 .send_json(serde_json::json!({
                     "model": model,
                     "messages": [{"role": "user", "content": prompt}],
@@ -795,7 +825,7 @@ fn refine_deliverables(app: &AppHandle, task_id: &str, agent: &Agent, settings: 
     // the strength of an mtime scan — with concurrent runs that rewrites a
     // teammate's deliverable under this task's unrelated brief.
     for rel in logged_shared_writes(&task.log) {
-        if refined >= 3 {
+        if refined >= MAX_REFINE_FILES {
             break;
         }
         let lower = rel.to_lowercase();
@@ -1136,7 +1166,16 @@ fn build_preamble(state: &AppState, agent: &Agent, settings: &Settings, task: &T
              Your own output is limited to: the work breakdown, delegation briefs, progress \
              tracking, integrating teammates' results into the final package, and a status \
              summary for the operator. If the team lacks the needed role, hire one with \
-             create_agent, then delegate to them.\n",
+             create_agent, then delegate to them.\n\
+             \n\
+             SIZE EVERY SUBTASK TO FINISH IN ONE RUN. A teammate's run is time- and \
+             context-bounded, so never hand off a piece so large it would stall: aim for one \
+             deliverable (or one clearly-bounded section) per subtask. If a piece still looks \
+             too big to finish comfortably, split it again before delegating — three focused \
+             subtasks that each land beat one that times out and returns nothing. Sequence the \
+             pieces so each brief carries only the context that piece needs, and state in the \
+             brief exactly what finished looks like. You are responsible for making the \
+             reassembled whole still satisfy the operator's original goal.\n",
         );
     }
     match agent.backend {
