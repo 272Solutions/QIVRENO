@@ -80,11 +80,11 @@ const NO_AVAIL: Availability = {
 const BACKENDS: BackendKind[] = ["builtin", "ollama", "lmstudio", "claude", "codex", "gemini", "grok"];
 
 const BACKEND_SUB: Record<BackendKind, string> = {
-  builtin: `Zero setup — runs on this ${MACHINE}`,
-  ollama: "Local, private, free",
-  lmstudio: "Local, OpenAI-compatible",
-  claude: "Claude Code CLI",
-  codex: "Codex CLI",
+  builtin: `Free and private — limited by this ${MACHINE}'s power`,
+  ollama: `Free and private — limited by this ${MACHINE}'s power`,
+  lmstudio: `Free and private — limited by this ${MACHINE}'s power`,
+  claude: "Recommended — strongest results, uses your Claude plan",
+  codex: "Recommended — strongest results, uses your OpenAI plan",
   gemini: "Google API key (free tier)",
   grok: "xAI API key",
 };
@@ -254,7 +254,10 @@ function BuiltinPanel(props: { onChanged: () => void }) {
         <>
           <div className="guide-intro">
             One click, no third-party installs: Qivreno downloads {st.model_name} (~{st.model_size_gb} GB,
-            picked for this {MACHINE}'s {st.ram_gb} GB RAM) and runs it with the bundled engine. Private — nothing leaves this {MACHINE}.
+            picked for this {MACHINE}'s {st.ram_gb} GB RAM) and runs it with the bundled engine.
+            Nothing you or your agents write ever leaves this {MACHINE}, and it keeps working without
+            internet. Because it runs on this {MACHINE}, expect slower and simpler results than
+            Claude or Codex — connect one of those if you want the strongest work from your agents.
           </div>
           {st.error && <div className="guide-intro" style={{ color: "var(--red)" }}>Last attempt failed: {st.error}</div>}
           {modelPicker}
@@ -450,9 +453,10 @@ export default function App() {
   const [showGetStarted, setShowGetStarted] = useState(false);
   const [filesFocus, setFilesFocus] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
-  // Theme still applies from the OS (or a previously saved preference); the
-  // in-app toggle was removed, so there's no setter.
-  const [theme] = useState<"dark" | "light" | "system">(
+  // Applied by the effect below: "system" follows the OS, light/dark force it.
+  // The toolbar cycling button was dropped in v1.4.8; the control now lives in
+  // Settings > Appearance, which is where people look for it.
+  const [theme, setTheme] = useState<"dark" | "light" | "system">(
     () => (localStorage.getItem("qiv_theme") as "dark" | "light" | "system") || "system",
   );
 
@@ -810,6 +814,8 @@ export default function App() {
           settings={snap.settings}
           license={snap.license}
           avail={avail}
+          theme={theme}
+          onTheme={setTheme}
           onClose={() => { setShowSettings(false); checkAvail(); }}
           notify={notify}
         />
@@ -3297,16 +3303,31 @@ function ConnectAIModal(props: {
 }) {
   const [picked, setPicked] = useState<BackendKind | null>(null);
   const groups: { label: string; items: BackendKind[] }[] = [
-    { label: `Private — runs on this ${MACHINE}`, items: ["builtin", "ollama", "lmstudio"] },
-    { label: "Cloud — your own account", items: ["claude", "codex", "gemini", "grok"] },
+    { label: `Private — stays on this ${MACHINE}`, items: ["builtin", "ollama", "lmstudio"] },
+    { label: "Best results — uses your own account", items: ["claude", "codex", "gemini", "grok"] },
   ];
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal" style={{ maxWidth: 480 }}>
         <h2>Connect an AI model</h2>
+        <p className="hint" style={{ marginBottom: 8 }}>
+          Your agents need an AI to think with. There are two ways to do this, and there is a real
+          trade-off between them.
+        </p>
+        <p className="hint" style={{ marginBottom: 8 }}>
+          <b>Private</b> — the AI runs on this {MACHINE}. Nothing you or your agents write is ever
+          sent anywhere. It is free and works without internet. The catch: it can only be as smart
+          as this {MACHINE} is powerful, so the work comes back slower and simpler.
+        </p>
+        <p className="hint" style={{ marginBottom: 8 }}>
+          <b>Best results</b> — the thinking happens on Claude's or OpenAI's computers using an
+          account you already pay for. Your agents produce noticeably better work. In exchange, the
+          text of your tasks is sent to that company to be processed.
+        </p>
         <p className="hint" style={{ marginBottom: 12 }}>
-          Qivreno's Built-in AI already runs on this {MACHINE} for free. Connect a cloud model for
-          stronger results using your own account — pick one for a guided setup.
+          <b>Our recommendation:</b> connect Claude or Codex — that is where your agents do their
+          best work. Choose a private option instead if keeping every word on this {MACHINE} matters
+          more to you than getting the strongest results. You can set up both and choose per agent.
         </p>
         {groups.map((g) => (
           <div key={g.label} className="field">
@@ -3635,6 +3656,9 @@ function SettingsModal(props: {
   settings: Settings;
   license: LicenseStatus;
   avail: Availability;
+  /** Theme lives in localStorage, not Settings, so it is passed in separately. */
+  theme: "dark" | "light" | "system";
+  onTheme: (t: "dark" | "light" | "system") => void;
   onClose: () => void;
   notify: (t: string, e?: boolean) => void;
 }) {
@@ -3647,6 +3671,7 @@ function SettingsModal(props: {
   const [showTelegram, setShowTelegram] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
   const [showMicro, setShowMicro] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
 
   // Wizards persist themselves; re-sync our draft when one closes so a later
@@ -3715,6 +3740,14 @@ function SettingsModal(props: {
         : "Off — drive Qivreno from a Creator Micro or any macro pad",
       tone: s.micro_enabled ? "up" : "",
       action: "Configure", onAction: () => setShowMicro(true),
+    },
+    {
+      icon: "eye", title: "Appearance",
+      status: props.theme === "system"
+        ? `Light or dark, following this ${MACHINE}`
+        : props.theme === "light" ? "Always light" : "Always dark",
+      tone: "",
+      action: "Change", onAction: () => setShowTheme(true),
     },
   ];
 
@@ -3832,6 +3865,55 @@ function SettingsModal(props: {
           onClose={() => { setShowMicro(false); refresh(); }}
         />
       )}
+      {showTheme && (
+        <ThemeModal
+          theme={props.theme}
+          onPick={props.onTheme}
+          onClose={() => setShowTheme(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Light / dark / follow-the-OS. The preference lives in localStorage (applied
+ * by the effect in App), not in Settings, so there is nothing to save here —
+ * picking applies immediately and the modal is just a chooser.
+ */
+function ThemeModal(props: {
+  theme: "dark" | "light" | "system";
+  onPick: (t: "dark" | "light" | "system") => void;
+  onClose: () => void;
+}) {
+  const options: { id: "system" | "light" | "dark"; title: string; sub: string }[] = [
+    { id: "system", title: `Match this ${MACHINE}`, sub: `Follows your ${MACHINE}'s light or dark setting` },
+    { id: "light", title: "Light", sub: `Always light, whatever this ${MACHINE} is set to` },
+    { id: "dark", title: "Dark", sub: `Always dark, whatever this ${MACHINE} is set to` },
+  ];
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <h2><Icon name="eye" /> Appearance</h2>
+        <p className="hint" style={{ margin: "6px 0 12px" }}>
+          Changes apply straight away, so you can see each one before you close this.
+        </p>
+        <div className="radio-row">
+          {options.map((o) => (
+            <button
+              key={o.id}
+              className={`radio-card ${props.theme === o.id ? "selected" : ""}`}
+              onClick={() => props.onPick(o.id)}
+            >
+              <div className="rc-title">{o.title}</div>
+              <div className="rc-sub">{o.sub}</div>
+            </button>
+          ))}
+        </div>
+        <div className="modal-actions">
+          <button className="btn" onClick={props.onClose}>Done</button>
+        </div>
+      </div>
     </div>
   );
 }
