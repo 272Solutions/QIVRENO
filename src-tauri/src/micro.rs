@@ -11,9 +11,16 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// One controllable action with its default accelerator. F13-F20 are the
-/// macropad convention (unused by the OS, easy to emit from any pad); macOS
-/// has no scancodes above F20, so the rest use hyper combos, which every
-/// pad configurator can send too.
+/// macropad convention — unused by the OS and easy to emit from any pad — so
+/// the first eight are the same everywhere.
+///
+/// The last four differ by platform: macOS has no scancodes above F20 and
+/// cannot register F21-F24, so it uses hyper combos. Windows registers
+/// F21-F24 fine, and `Cmd` there means the Windows key (Win+Ctrl+<digit> is
+/// also claimed by the shell), so shipping the mac combos to Windows shows
+/// users a modifier their keyboard doesn't have. Keep the two lists in sync
+/// with MICRO_ACTIONS in src/types.ts.
+#[cfg(target_os = "macos")]
 pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("show_board", "F13", "Show the Board"),
     ("show_chat", "F14", "Show Team Chat"),
@@ -29,6 +36,22 @@ pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("toggle_window", "Cmd+Ctrl+Alt+Shift+4", "Show / hide Qivreno"),
 ];
 
+#[cfg(not(target_os = "macos"))]
+pub const ACTIONS: &[(&str, &str, &str)] = &[
+    ("show_board", "F13", "Show the Board"),
+    ("show_chat", "F14", "Show Team Chat"),
+    ("show_files", "F15", "Show Files"),
+    ("show_library", "F16", "Show the Library"),
+    ("focus_composer", "F17", "New task (focus the composer)"),
+    ("open_review", "F18", "Open the newest task in Review"),
+    ("approve_review", "F19", "Approve the newest reviewed task"),
+    ("rerun_failed", "F20", "Re-run the newest failed task"),
+    ("open_input_request", "F21", "Answer the agent that needs input"),
+    ("toggle_agents", "F22", "Pause / resume all agents"),
+    ("reveal_shared", "F23", "Open the Shared folder"),
+    ("toggle_window", "F24", "Show / hide Qivreno"),
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MicroBinding {
     pub action: String,
@@ -40,6 +63,44 @@ pub fn default_bindings() -> Vec<MicroBinding> {
         .iter()
         .map(|(a, k, _)| MicroBinding { action: (*a).to_string(), accel: (*k).to_string() })
         .collect()
+}
+
+/// Rewrite bindings this platform shouldn't be showing. Anyone who opened the
+/// Macro pad modal before the per-platform defaults landed has twelve accels
+/// persisted in settings.json, so new defaults alone would never reach them —
+/// on Windows they'd keep seeing `Cmd+...` for the last four actions. Only
+/// accels that still match another platform's default are touched; a
+/// deliberate rebind is left alone.
+fn migrate_foreign_accels(bindings: &mut Vec<MicroBinding>) -> bool {
+    #[cfg(target_os = "macos")]
+    const FOREIGN: &[(&str, &str)] = &[
+        ("open_input_request", "F21"),
+        ("toggle_agents", "F22"),
+        ("reveal_shared", "F23"),
+        ("toggle_window", "F24"),
+    ];
+    #[cfg(not(target_os = "macos"))]
+    const FOREIGN: &[(&str, &str)] = &[
+        ("open_input_request", "Cmd+Ctrl+Alt+Shift+1"),
+        ("toggle_agents", "Cmd+Ctrl+Alt+Shift+2"),
+        ("reveal_shared", "Cmd+Ctrl+Alt+Shift+3"),
+        ("toggle_window", "Cmd+Ctrl+Alt+Shift+4"),
+    ];
+
+    let mut changed = false;
+    for b in bindings.iter_mut() {
+        let is_foreign = FOREIGN
+            .iter()
+            .any(|(a, k)| *a == b.action && k.eq_ignore_ascii_case(b.accel.trim()));
+        if !is_foreign {
+            continue;
+        }
+        if let Some((_, want, _)) = ACTIONS.iter().find(|(a, _, _)| *a == b.action) {
+            b.accel = (*want).to_string();
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// (Re)register the global shortcuts to match current settings. Called at
@@ -56,7 +117,17 @@ pub fn sync(app: &AppHandle) {
     let bindings = if settings.micro_bindings.is_empty() {
         default_bindings()
     } else {
-        settings.micro_bindings.clone()
+        let mut b = settings.micro_bindings.clone();
+        // Persist the migration so the Macro pad modal shows what actually got
+        // registered, rather than silently diverging from it.
+        if migrate_foreign_accels(&mut b) {
+            {
+                let mut s = state.settings.lock().unwrap();
+                s.micro_bindings = b.clone();
+            }
+            state.save_settings();
+        }
+        b
     };
     let mut failed: Vec<String> = vec![];
     for b in bindings {

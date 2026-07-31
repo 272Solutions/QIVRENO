@@ -94,7 +94,20 @@ export interface MicroBinding {
   accel: string;
 }
 
-/** Mirror of the Rust ACTIONS table in micro.rs — keep in sync. */
+/**
+ * Mirror of the Rust ACTIONS table in micro.rs — keep in sync, including the
+ * per-platform split for the last four actions: macOS cannot register F21-F24,
+ * and on Windows "Cmd" is the Windows key (so the mac hyper combos would show a
+ * modifier the keyboard doesn't have, on top of colliding with the shell's
+ * Win+Ctrl+<digit>).
+ */
+const MICRO_IS_MAC = typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
+
+/** The last four accels, which differ by platform. */
+const MICRO_TAIL: string[] = MICRO_IS_MAC
+  ? ["Cmd+Ctrl+Alt+Shift+1", "Cmd+Ctrl+Alt+Shift+2", "Cmd+Ctrl+Alt+Shift+3", "Cmd+Ctrl+Alt+Shift+4"]
+  : ["F21", "F22", "F23", "F24"];
+
 export const MICRO_ACTIONS: { action: string; accel: string; label: string }[] = [
   { action: "show_board", accel: "F13", label: "Show the Board" },
   { action: "show_chat", accel: "F14", label: "Show Team Chat" },
@@ -104,10 +117,10 @@ export const MICRO_ACTIONS: { action: string; accel: string; label: string }[] =
   { action: "open_review", accel: "F18", label: "Open the newest task in Review" },
   { action: "approve_review", accel: "F19", label: "Approve the newest reviewed task" },
   { action: "rerun_failed", accel: "F20", label: "Re-run the newest failed task" },
-  { action: "open_input_request", accel: "Cmd+Ctrl+Alt+Shift+1", label: "Answer the agent that needs input" },
-  { action: "toggle_agents", accel: "Cmd+Ctrl+Alt+Shift+2", label: "Pause / resume all agents" },
-  { action: "reveal_shared", accel: "Cmd+Ctrl+Alt+Shift+3", label: "Open the Shared folder" },
-  { action: "toggle_window", accel: "Cmd+Ctrl+Alt+Shift+4", label: "Show / hide Qivreno" },
+  { action: "open_input_request", accel: MICRO_TAIL[0], label: "Answer the agent that needs input" },
+  { action: "toggle_agents", accel: MICRO_TAIL[1], label: "Pause / resume all agents" },
+  { action: "reveal_shared", accel: MICRO_TAIL[2], label: "Open the Shared folder" },
+  { action: "toggle_window", accel: MICRO_TAIL[3], label: "Show / hide Qivreno" },
 ];
 
 export interface SharedFile {
