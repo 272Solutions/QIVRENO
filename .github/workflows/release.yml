@@ -122,7 +122,7 @@ jobs:
       # notarization rejects them ("not signed with a valid Developer ID
       # certificate" / "signature does not include a secure timestamp").
       # Sign them inside-out before the bundle is assembled. Mirrors the same
-      # step in sign-build.sh for local release builds.
+      # step in sign-release.sh for local release builds.
       - name: Sign bundled engine binaries (macOS, only when signing is configured)
         if: matrix.platform == 'macos-latest'
         env:
