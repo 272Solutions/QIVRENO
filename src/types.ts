@@ -67,11 +67,6 @@ export interface Settings {
   brand_text: string;
   terms_accepted_version: number;
   terms_accepted_at: number;
-  license_key: string;
-  license_refresh_token: string;
-  license_server: string;
-  last_seen_ms: number;
-  trial_started_at: number;
   qivvy_seeded: boolean;
   mail_enabled: boolean;
   mail_host: string;
@@ -185,15 +180,6 @@ export interface BuiltinStatus {
   error: string;
 }
 
-export interface LicenseStatus {
-  state: "trial" | "trial_expired" | "licensed" | "grace" | "expired";
-  days_left: number;
-  plan: string;
-  customer: string;
-  expires_at: number;
-  active: boolean;
-}
-
 export interface Availability {
   builtin: boolean;
   ollama: boolean;
@@ -228,7 +214,6 @@ export interface Snapshot {
   docs: Doc[];
   memory: MemoryStore;
   settings: Settings;
-  license: LicenseStatus;
 }
 
 export const AGENT_COLORS = [
@@ -237,7 +222,6 @@ export const AGENT_COLORS = [
   "#ef8354", "#7ea6e0", "#d979b8", "#9aa5b1",
 ];
 
-export const MAX_AGENTS = 12;
 
 export interface TemplateAgent {
   name: string;

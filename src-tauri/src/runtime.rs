@@ -45,30 +45,6 @@ pub fn log_task_line(app: &AppHandle, task_id: &str, line: &str) {
 
 /// Create a task and get it running. `agent_key` of None means broadcast:
 /// the router picks the best-suited agent.
-/// Subscription gate: task execution requires an active trial, license, or
-/// grace period. Data stays intact and viewable either way.
-pub fn license_ok(state: &AppState) -> Result<(), String> {
-    let settings = state.settings.lock().unwrap();
-    // Clock-rollback guard: time moving back more than an hour behind the
-    // last verified moment invalidates the cached key until the next
-    // successful refresh moves the guard forward again.
-    if settings.last_seen_ms > now_ms() + 3_600_000 {
-        return Err("the system clock appears to have been set back — fix the date/time (the license re-verifies automatically)".into());
-    }
-    let status = crate::license::status(
-        &settings.license_key,
-        settings.trial_started_at,
-        &crate::platform::hardware_uuid(),
-    );
-    if status.active {
-        Ok(())
-    } else if status.state == "trial_expired" {
-        Err("your free trial has ended — enter a license key in Settings to keep your agents working".into())
-    } else {
-        Err("your Qivreno subscription has expired — enter a renewed license key in Settings".into())
-    }
-}
-
 pub fn submit_task(
     app: &AppHandle,
     title: String,
@@ -79,7 +55,6 @@ pub fn submit_task(
     hop: u32,
 ) -> Result<Task, String> {
     let state = app.state::<AppState>();
-    license_ok(&state)?;
     let agent_id = match &agent_key {
         Some(key) => {
             let a = state
@@ -294,7 +269,6 @@ pub fn provide_input(app: &AppHandle, task_id: &str, answer: &str) -> Result<(),
         return Err("answer is empty".into());
     }
     let state = app.state::<AppState>();
-    license_ok(&state)?;
     let needs_routing;
     {
         let mut tasks = state.tasks.lock().unwrap();
@@ -432,8 +406,7 @@ pub fn move_task_to(app: &AppHandle, key: &str, column: &str, actor: &str) -> Re
         match column.as_str() {
             "in_progress" => {
                 if !active {
-                    license_ok(&state)?;
-                    // Re-dispatch: draft, failed, cancelled or done tasks start a fresh run.
+                                    // Re-dispatch: draft, failed, cancelled or done tasks start a fresh run.
                     if t.agent_id.is_some() {
                         t.status = "queued".into();
                         needs_schedule = true;

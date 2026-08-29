@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
-pub const MAX_AGENTS: usize = 12;
-
 #[derive(Serialize)]
 pub struct Snapshot {
     pub agents: Vec<Agent>,
@@ -16,7 +14,6 @@ pub struct Snapshot {
     pub docs: Vec<Doc>,
     pub memory: MemoryStore,
     pub settings: Settings,
-    pub license: crate::license::LicenseStatus,
 }
 
 #[tauri::command]
@@ -28,7 +25,6 @@ pub fn get_snapshot(state: State<'_, AppState>) -> Snapshot {
         messages: state.messages.lock().unwrap().clone(),
         docs: state.docs.lock().unwrap().clone(),
         memory: state.memory.lock().unwrap().clone(),
-        license: crate::license::status(&settings.license_key, settings.trial_started_at, &crate::platform::hardware_uuid()),
         settings,
     }
 }
@@ -424,52 +420,6 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// Verify and store a subscription key. An empty string clears it (reverts
-/// to trial rules).
-/// Accepts either a one-time activation code (QIVACT-…) — redeemed against
-/// qivreno.ai for a device-bound key with auto-renewal — or a raw QIV- key
-/// (manual/enterprise licensing). Empty clears back to trial rules.
-#[tauri::command]
-pub async fn apply_license(app: AppHandle, key: String) -> Result<crate::license::LicenseStatus, String> {
-    let input = key.trim().to_string();
-    if input.to_uppercase().starts_with("QIVACT-") {
-        crate::activation::activate_with_code(&app, &input.to_uppercase())?;
-    } else {
-        if !input.is_empty() {
-            let lic = crate::license::parse_and_verify(&input)?;
-            if now_ms() > lic.exp + crate::license::GRACE_DAYS * 24 * 60 * 60 * 1000 {
-                return Err("that license key has expired — request a renewal from 272 Solutions".into());
-            }
-            if !lic.device.is_empty() && lic.device != crate::platform::hardware_uuid() {
-                return Err("that license key is bound to a different computer".into());
-            }
-        }
-        let state = app.state::<AppState>();
-        let mut settings = state.settings.lock().unwrap();
-        settings.license_key = input;
-        settings.license_refresh_token = String::new();
-        drop(settings);
-        state.save_settings();
-        runtime::emit_changed(&app);
-    }
-    let state = app.state::<AppState>();
-    let settings = state.settings.lock().unwrap();
-    Ok(crate::license::status(
-        &settings.license_key,
-        settings.trial_started_at,
-        &crate::platform::hardware_uuid(),
-    ))
-}
-
-/// Turn off subscription renewal (called after the in-app retention screen).
-/// Access continues until the paid-through date; returns that date (epoch ms).
-#[tauri::command]
-pub async fn cancel_subscription(app: AppHandle) -> Result<u64, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::activation::cancel_subscription(&app))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
 #[tauri::command]
 pub async fn check_availability(app: AppHandle) -> Availability {
     tauri::async_runtime::spawn_blocking(move || {
@@ -537,9 +487,6 @@ pub fn create_agent_core(app: &AppHandle, input: AgentInput) -> Result<Agent, St
     let system = name.eq_ignore_ascii_case("Qivvy") || name.eq_ignore_ascii_case("Concierge");
     {
         let agents = state.agents.lock().unwrap();
-        if !system && agents.iter().filter(|a| !a.system).count() >= MAX_AGENTS {
-            return Err(format!("workspace is full ({MAX_AGENTS} agents max — Qivvy and the Concierge don't count)"));
-        }
         if agents.iter().any(|a| a.name.eq_ignore_ascii_case(&name)) {
             return Err(format!("an agent named '{name}' already exists"));
         }

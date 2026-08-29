@@ -62,7 +62,6 @@ pub fn kill_stray_engines() {
     Command::new("/usr/bin/pkill").args(["-f", "engine/llama-server"]).status().ok();
 }
 
-/// Show a file (selected) or folder in the system file manager.
 /// Run a child process with a hard wall-clock timeout. A child that blocks
 /// forever (e.g. osascript stuck on an unanswerable TCC permission prompt)
 /// must never wedge the calling task thread — kill it and return an error.
@@ -103,6 +102,7 @@ pub fn output_with_timeout(
     }
 }
 
+/// Show a file (selected) or folder in the system file manager.
 pub fn reveal(path: &std::path::Path, is_file: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -155,58 +155,6 @@ pub fn ram_gb() -> u64 {
                 .unwrap_or(8)
         }
     })
-}
-
-/// Stable hardware identifier for license device-binding. Copying app data
-/// to another machine changes this value, so copied license files fail.
-pub fn hardware_uuid() -> String {
-    use std::sync::OnceLock;
-    static UUID: OnceLock<String> = OnceLock::new();
-    UUID.get_or_init(|| {
-        #[cfg(target_os = "macos")]
-        {
-            let out = Command::new("/usr/sbin/ioreg")
-                .args(["-rd1", "-c", "IOPlatformExpertDevice"])
-                .output();
-            if let Ok(out) = out {
-                let text = String::from_utf8_lossy(&out.stdout);
-                if let Some(line) = text.lines().find(|l| l.contains("IOPlatformUUID")) {
-                    if let Some(v) = line.split('"').nth(3) {
-                        return v.to_string();
-                    }
-                }
-            }
-        }
-        #[cfg(windows)]
-        {
-            let out = hide_console(Command::new("powershell").args([
-                "-NoProfile",
-                "-Command",
-                "(Get-CimInstance Win32_ComputerSystemProduct).UUID",
-            ]))
-            .output();
-            if let Ok(out) = out {
-                let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !v.is_empty() {
-                    return v;
-                }
-            }
-        }
-        // Fallback: random-but-persisted id would go here; empty disables binding.
-        String::new()
-    })
-    .clone()
-}
-
-pub fn hostname() -> String {
-    #[cfg(windows)]
-    let out = hide_console(&mut Command::new("hostname")).output();
-    #[cfg(not(windows))]
-    let out = Command::new("/bin/hostname").arg("-s").output();
-    out.ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "Computer".into())
 }
 
 pub fn engine_binary() -> &'static str {

@@ -28,17 +28,10 @@ fn load_vec<T: serde::de::DeserializeOwned>(path: &Path) -> Vec<T> {
 impl AppState {
     pub fn load(data_dir: PathBuf) -> Self {
         fs::create_dir_all(&data_dir).ok();
-        let mut settings: Settings = fs::read_to_string(data_dir.join("settings.json"))
+        let settings: Settings = fs::read_to_string(data_dir.join("settings.json"))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-        // First launch anchors the free trial.
-        if settings.trial_started_at == 0 {
-            settings.trial_started_at = crate::models::now_ms();
-            if let Ok(s) = serde_json::to_string_pretty(&settings) {
-                fs::write(data_dir.join("settings.json"), s).ok();
-            }
-        }
         let mut tasks: Vec<Task> = load_vec(&data_dir.join("tasks.json"));
         // Anything that was mid-flight when the app quit is stale.
         for t in tasks.iter_mut() {

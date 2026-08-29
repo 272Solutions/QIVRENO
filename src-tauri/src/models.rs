@@ -207,22 +207,6 @@ pub struct Settings {
     pub terms_accepted_version: u32,
     #[serde(default)]
     pub terms_accepted_at: u64,
-    /// Qivreno subscription license key (QIV-…), verified offline.
-    #[serde(default)]
-    pub license_key: String,
-    /// Per-device refresh token from activation; enables silent renewal.
-    #[serde(default)]
-    pub license_refresh_token: String,
-    /// License service base URL (overridable for testing).
-    #[serde(default = "default_license_server")]
-    pub license_server: String,
-    /// Monotonic clock guard — set on refresh; time moving backwards past
-    /// this invalidates the cached key until a successful refresh.
-    #[serde(default)]
-    pub last_seen_ms: u64,
-    /// First-launch timestamp; anchors the free trial.
-    #[serde(default)]
-    pub trial_started_at: u64,
     /// One-time flag: Qivvy (the default project-manager agent) was seeded.
     #[serde(default)]
     pub qivvy_seeded: bool,
@@ -276,12 +260,8 @@ pub fn default_builtin_port() -> u16 {
     42730
 }
 
-pub fn default_license_server() -> String {
-    "https://qivreno.ai".to_string()
-}
-
 /// Bump when docs/TERMS.md changes materially — users re-accept in-app.
-pub const TERMS_VERSION: u32 = 2;
+pub const TERMS_VERSION: u32 = 3;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -303,11 +283,6 @@ impl Default for Settings {
             brand_text: String::new(),
             terms_accepted_version: 0,
             terms_accepted_at: 0,
-            license_key: String::new(),
-            license_refresh_token: String::new(),
-            license_server: default_license_server(),
-            last_seen_ms: 0,
-            trial_started_at: 0,
             qivvy_seeded: false,
             mail_enabled: false,
             mail_host: String::new(),

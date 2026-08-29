@@ -1,4 +1,3 @@
-mod activation;
 mod builtin;
 mod bus;
 mod calendar;
@@ -12,7 +11,6 @@ mod pdf;
 mod platform;
 mod pptx;
 mod library;
-mod license;
 mod lmstudio;
 mod models;
 mod ollama;
@@ -68,7 +66,6 @@ pub fn run() {
             // reclaim ownership so exactly one engine runs, managed by us.
             platform::kill_stray_engines();
             builtin::ensure_started(app.handle());
-            activation::start_background_refresh(app.handle());
             runtime::ensure_qivvy(app.handle());
             micro::sync(app.handle());
             runtime::start_watchdog(app.handle().clone());
@@ -92,8 +89,6 @@ pub fn run() {
             commands::rename_doc,
             commands::delete_doc,
             commands::set_memory,
-            commands::apply_license,
-            commands::cancel_subscription,
             commands::provide_input,
             commands::set_agent_enabled,
             commands::test_mail_connection,

@@ -154,33 +154,16 @@ Paths and server URLs are overridable in Settings.
 - Each agent works one task at a time; user chats and board tasks are
   prioritized over agent-to-agent traffic.
 
-## Licensing & subscription
+## Cost & licensing
 
-Qivreno is sold by **272 Solutions LLC** as a monthly subscription:
+Qivreno is **free**. No trial, no licence key, no account, no seat limit, and
+no cap on how many agents you create. There is no telemetry and no server to
+phone home to — the app works fully offline with the built-in engine.
 
-- Fresh installs get a **14-day full-featured free trial** (anchored to
-  first launch).
-- A license key (`QIV-…`) is an Ed25519-signed payload verified **offline**
-  against a public key embedded in the app — no account or server required.
-  Enter it in Settings → Subscription.
-- Keys carry a plan (`pro` / `enterprise`), customer, seats, and expiry.
-  After expiry there is a **7-day grace period**, then agents stop running
-  new tasks (all data stays intact and visible) until a renewed key is
-  entered. Trial expiry behaves the same way.
-- Issuing keys (272 Solutions only — requires the private key, which lives
-  **outside this repo** and must never be committed):
-
-  ```sh
-  cd tools/license-gen
-  # one-time: cargo run -- keygen --out <private.key>
-  cargo run -- issue --key <private.key> \
-    --name "Customer LLC" --email billing@customer.com --plan pro --months 1
-  cargo run -- verify QIV-...   # sanity check
-  ```
-
-  Hook this into your payment provider (Stripe/Paddle/Lemon Squeezy webhook
-  → issue a key for the paid period → email it to the customer). Monthly
-  keys are issued with ~30.5 days per month so renewals overlap billing.
+The only things that ever cost money are optional and paid to someone else:
+if you point an agent at Claude, Codex, Gemini or Grok, that runs on **your**
+subscription or API key with those providers, under their terms. Ollama, LM
+Studio and the bundled llama.cpp engine run locally and cost nothing.
 
 ## Develop
 
@@ -237,7 +220,7 @@ Before selling the Windows build: smoke-test on a real Windows machine
 Authenticode code-signing certificate (SmartScreen warns loudly on
 unsigned installers).
 
-## Distribution / commercial notes
+## Distribution notes
 
 - All dependencies (Tauri, React, Vite, serde, ureq, tiny_http, uuid) are
   MIT/Apache-2.0 licensed — free for commercial use, no copyleft.
@@ -246,10 +229,9 @@ unsigned installers).
   models run locally under their own licenses. Keep it that way — reselling
   Anthropic/OpenAI access through your subscription would violate their
   terms.
-- For paid distribution you will need: an Apple Developer ID ($99/yr) for
-  signing + notarization, a licensing/entitlement layer (license keys or
-  account login), and a billing provider (Stripe, Paddle, Lemon Squeezy —
-  the latter two handle global sales tax for you).
+- Public distribution needs an Apple Developer ID ($99/yr) so builds can be
+  signed and notarized — macOS warns on unsigned downloads. `./sign-release.sh`
+  does the whole signed + notarized + stapled build.
 
 ## Data locations (macOS)
 

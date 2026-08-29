@@ -5,7 +5,7 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import {
   Agent, AGENT_COLORS, agentTemplateGroups, Availability, BackendKind,
   BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, ConnectedFolder,
-  displayName, Doc, fileKind, LicenseStatus, MAX_AGENTS, Permission, Settings,
+  displayName, Doc, fileKind, Permission, Settings,
   MICRO_ACTIONS, SharedFile, skillsSummary, Snapshot, Task, TeamTemplate, TEMPLATES,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
@@ -63,13 +63,11 @@ const EMPTY_SNAPSHOT: Snapshot = {
     bus_port: 0, max_hops: 6, router_model: "", builtin_enabled: false,
     builtin_port: 0, backend_advice_shown: true, brand_accent: "", brand_text: "",
     terms_accepted_version: 999, terms_accepted_at: 0,
-    license_key: "", license_refresh_token: "", license_server: "", last_seen_ms: 0,
-    trial_started_at: 0, qivvy_seeded: false,
+    qivvy_seeded: false,
     mail_enabled: false, mail_host: "", mail_port: 993, mail_user: "", mail_password: "", mail_allowlist: "",
     telegram_enabled: false, telegram_token: "", telegram_chat_id: 0, telegram_pair_code: "",
     connected_folders: [], micro_enabled: false, micro_bindings: [],
   },
-  license: { state: "trial", days_left: 14, plan: "trial", customer: "", expires_at: 0, active: true },
 };
 
 const NO_AVAIL: Availability = {
@@ -611,28 +609,8 @@ export default function App() {
     invoke("update_settings", { settings: { ...snap.settings, backend_advice_shown: true } }).catch(() => {});
   }, [snap.settings]);
 
-  const lic = snap.license;
-  const bannerText =
-    lic.state === "trial_expired"
-      ? "Your free trial has ended — subscribe to keep your team working. Your files and agents are safe."
-      : lic.state === "expired"
-      ? "Your Qivreno subscription has expired — agents are paused until it renews."
-      : lic.state === "grace"
-      ? `Your subscription has lapsed — ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} of grace remaining.`
-      : lic.state === "trial" && lic.days_left <= 5
-      ? `Free trial: ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} left.`
-      : null;
-
-
   return (
     <div className="app-col">
-      {bannerText && (
-        <div className={`license-banner ${lic.active ? "" : "blocked"}`}>
-          <span>{bannerText}</span>
-          <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>Subscribe</button>
-          <button className="btn sm ghost" onClick={() => setShowSettings(true)}>Enter activation code</button>
-        </div>
-      )}
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
@@ -655,7 +633,7 @@ export default function App() {
         </button>
         <div className="section-label">
           <span>Agents</span>
-          <span>{snap.agents.filter((a) => !a.system).length}/{MAX_AGENTS}</span>
+          <span>{snap.agents.filter((a) => !a.system).length}</span>
         </div>
         <div className="agent-list">
           {[...snap.agents].sort((a, b) => Number(b.system) - Number(a.system)).map((a) => (
@@ -675,14 +653,12 @@ export default function App() {
             </button>
           ))}
         </div>
-        <button className="add-agent" disabled={snap.agents.filter((a) => !a.system).length >= MAX_AGENTS} onClick={() => setEditingAgent("new")}>
+        <button className="add-agent" onClick={() => setEditingAgent("new")}>
           + New Agent
         </button>
-        {snap.agents.filter((a) => !a.system).length < MAX_AGENTS && (
-          <button className="add-agent quickstart" onClick={() => setShowTemplates(true)}>
-            <Icon name="spark" /> Quick Start Team
-          </button>
-        )}
+        <button className="add-agent quickstart" onClick={() => setShowTemplates(true)}>
+          <Icon name="spark" /> Quick Start Team
+        </button>
         <button className="add-agent getstarted" onClick={() => setShowGetStarted(true)}>
           <Icon name="rocket" /> Get Started
         </button>
@@ -812,7 +788,6 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           settings={snap.settings}
-          license={snap.license}
           avail={avail}
           theme={theme}
           onTheme={setTheme}
@@ -2870,10 +2845,8 @@ function TemplateModal(props: {
     setChecked(templateDefaultChecked(t, existingNames));
   };
 
-  const slots = MAX_AGENTS - existing.filter((a) => !a.system).length;
   const selectable = tpl.agents.filter((a) => !existingNames.has(a.name.toLowerCase()));
   const selectedCount = selectable.filter((a) => checked.has(a.name)).length;
-  const overCap = selectedCount > slots;
 
   const create = async () => {
     setCreating(true);
@@ -2948,11 +2921,6 @@ function TemplateModal(props: {
               );
             })}
           </div>
-          {overCap && (
-            <div className="hint" style={{ color: "var(--red)" }}>
-              Only {slots} agent slot{slots === 1 ? "" : "s"} left (12 max) — uncheck {selectedCount - slots}.
-            </div>
-          )}
         </div>
         <div className="field">
           <label>Backend for the whole team (changeable per agent later)</label>
@@ -2973,7 +2941,7 @@ function TemplateModal(props: {
         </div>
         <div className="modal-actions">
           <button className="btn ghost" onClick={props.onClose}>Cancel</button>
-          <button className="btn" disabled={creating || selectedCount === 0 || overCap} onClick={create}>
+          <button className="btn" disabled={creating || selectedCount === 0} onClick={create}>
             {creating ? "Creating…" : `Create ${selectedCount} Agent${selectedCount === 1 ? "" : "s"}`}
           </button>
         </div>
@@ -3152,21 +3120,6 @@ function AgentModal(props: {
 }
 
 /* ------------------------------------------------------------------ */
-
-function licenseSummary(lic: LicenseStatus): string {
-  switch (lic.state) {
-    case "licensed":
-      return `✓ Licensed (${lic.plan}) to ${lic.customer} — renews/expires ${new Date(lic.expires_at).toLocaleDateString()}`;
-    case "grace":
-      return `⚠ Subscription lapsed — grace period, ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} left`;
-    case "expired":
-      return "✕ Subscription expired — agents are paused";
-    case "trial_expired":
-      return "✕ Free trial ended — agents are paused";
-    default:
-      return `Free trial — ${lic.days_left} day${lic.days_left === 1 ? "" : "s"} remaining`;
-  }
-}
 
 /** Friendly email-connection wizard with provider presets + a real test. */
 const MAIL_PRESETS: { label: string; host: string; port: number; hint: string }[] = [
@@ -3351,130 +3304,6 @@ function ConnectAIModal(props: {
   );
 }
 
-/** Retention screen shown before a cancellation goes through. */
-function CancelSubscriptionModal(props: {
-  onKeep: () => void;
-  onCancelled: (accessUntil: number) => void;
-  notify: (t: string, e?: boolean) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const confirmCancel = async () => {
-    setBusy(true);
-    try {
-      const accessUntil = await invoke<number>("cancel_subscription");
-      props.onCancelled(accessUntil);
-    } catch (e) {
-      props.notify(String(e), true);
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onKeep(); }}>
-      <div className="modal" style={{ maxWidth: 480 }}>
-        <h2>Before you go…</h2>
-        <p style={{ marginTop: 6 }}>Cancelling stops the renewal. Here is what that means:</p>
-        <ul style={{ lineHeight: 1.9, paddingLeft: 22, margin: "10px 0 14px" }}>
-          <li>Your team keeps working until the end of the period you already paid for.</li>
-          <li>After that, agents pause. <b>Nothing is deleted</b> — your files, Library, board, and agent memories stay on this {MACHINE}.</li>
-          <li>Resubscribing later picks up right where you left off.</li>
-        </ul>
-        <p style={{ color: "var(--dim, #6B7280)", fontSize: 13.5 }}>
-          If something isn't working or the price is the issue, tell us first — hello@qivreno.ai. We read everything and we can usually help.
-        </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
-          <button className="btn danger sm" disabled={busy} onClick={confirmCancel}>
-            {busy ? "Cancelling…" : "Cancel my renewal"}
-          </button>
-          <button className="btn" onClick={props.onKeep}>Keep my subscription</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Subscription management — activation, renewal, cancellation. */
-function SubscriptionModal(props: {
-  settings: Settings;
-  license: LicenseStatus;
-  onStatus: (l: LicenseStatus) => void;
-  onClose: () => void;
-  notify: (t: string, e?: boolean) => void;
-}) {
-  const [licKey, setLicKey] = useState(props.settings.license_key);
-  const [showCancel, setShowCancel] = useState(false);
-  const [cancelledUntil, setCancelledUntil] = useState(0);
-  const applyLicense = async () => {
-    try {
-      const status = await invoke<LicenseStatus>("apply_license", { key: licKey });
-      props.onStatus(status);
-      props.notify(licKey.trim() ? "License applied" : "License cleared");
-    } catch (e) {
-      props.notify(String(e), true);
-    }
-  };
-  return (
-    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
-      <div className="modal" style={{ maxWidth: 460 }}>
-        <h2>Subscription</h2>
-        <div className={`license-status ${props.license.active ? "ok" : "bad"}`} style={{ marginTop: 6 }}>
-          {licenseSummary(props.license)}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <input
-            type="text"
-            style={{ flex: 1 }}
-            placeholder="Activation code (QIVACT-…) or license key (QIV-…)"
-            value={licKey}
-            onChange={(e) => setLicKey(e.target.value)}
-          />
-          <button className="btn sm" onClick={applyLicense}>Apply</button>
-        </div>
-        <div className="hint" style={{ marginTop: 8 }}>
-          {props.settings.license_refresh_token
-            ? cancelledUntil > 0
-              ? `Renewal cancelled — access continues until ${new Date(cancelledUntil).toLocaleDateString()}.`
-              : `Activated on this ${MACHINE} — your license renews automatically in the background.`
-            : `Paste the activation code from your purchase email (it activates this ${MACHINE} and renews automatically), or a license key issued by 272 Solutions.`}
-        </div>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 10 }}>
-          {!props.settings.license_refresh_token && props.license.state !== "licensed" && (
-            <button className="btn sm" onClick={() => openUrl("https://qivreno.ai/pricing")}>
-              Subscribe at qivreno.ai
-            </button>
-          )}
-          {props.settings.license_refresh_token && cancelledUntil === 0 && (
-            <button
-              className="btn link sm"
-              style={{ background: "none", border: "none", color: "var(--text-faint)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-              onClick={() => setShowCancel(true)}
-            >
-              Cancel subscription…
-            </button>
-          )}
-        </div>
-        <div className="modal-actions">
-          <button className="btn" onClick={props.onClose}>Done</button>
-        </div>
-      </div>
-      {showCancel && (
-        <CancelSubscriptionModal
-          onKeep={() => setShowCancel(false)}
-          onCancelled={(until) => {
-            setShowCancel(false);
-            setCancelledUntil(until || 1);
-            props.notify(
-              until > 0
-                ? `Renewal cancelled — your team keeps working until ${new Date(until).toLocaleDateString()}.`
-                : "Renewal cancelled.",
-            );
-          }}
-          notify={props.notify}
-        />
-      )}
-    </div>
-  );
-}
-
 /** Guided Telegram setup — text tasks to the team from your phone. */
 function ConnectTelegramModal(props: {
   onClose: () => void;
@@ -3654,7 +3483,6 @@ function BrandingModal(props: {
     setup button that opens its guided wizard. Raw fields live under Advanced. */
 function SettingsModal(props: {
   settings: Settings;
-  license: LicenseStatus;
   avail: Availability;
   /** Theme lives in localStorage, not Settings, so it is passed in separately. */
   theme: "dark" | "light" | "system";
@@ -3663,9 +3491,7 @@ function SettingsModal(props: {
   notify: (t: string, e?: boolean) => void;
 }) {
   const [s, setS] = useState<Settings>({ ...props.settings });
-  const [licStatus, setLicStatus] = useState<LicenseStatus>(props.license);
   const [showTerms, setShowTerms] = useState(false);
-  const [showSub, setShowSub] = useState(false);
   const [showConnectEmail, setShowConnectEmail] = useState(false);
   const [showConnectAI, setShowConnectAI] = useState(false);
   const [showTelegram, setShowTelegram] = useState(false);
@@ -3695,11 +3521,6 @@ function SettingsModal(props: {
     icon: IconName; title: string; status: string; tone: "up" | "warn" | "";
     action?: string; onAction?: () => void;
   }[] = [
-    {
-      icon: "card", title: "Subscription",
-      status: licenseSummary(licStatus), tone: licStatus.active ? "up" : "warn",
-      action: "Manage", onAction: () => setShowSub(true),
-    },
     {
       icon: "agent", title: "AI models",
       status: aiUp.length > 0
@@ -3824,15 +3645,6 @@ function SettingsModal(props: {
         </div>
       </div>
       {showTerms && <TermsModal viewOnly onClose={() => setShowTerms(false)} notify={props.notify} />}
-      {showSub && (
-        <SubscriptionModal
-          settings={s}
-          license={licStatus}
-          onStatus={setLicStatus}
-          notify={props.notify}
-          onClose={() => { setShowSub(false); refresh(); }}
-        />
-      )}
       {showConnectEmail && (
         <ConnectEmailModal
           settings={s}

@@ -31,9 +31,9 @@ The Software allows agents to act autonomously, including creating and modifying
 - You are responsible for supervising agent activity and for any content agents create or send, including its accuracy, legality, and suitability.
 - You will maintain appropriate backups of your data.
 
-## 5. License, Trial, and Subscription
+## 5. License to Use
 
-Subject to these Terms and payment of applicable fees, 272 Solutions grants you a limited, non-exclusive, non-transferable license to install and use the Software for your internal business purposes. New installations include a limited free trial. Continued use requires a valid subscription license key. Keys may not be shared, resold, or used beyond their seat count. When a subscription lapses, the Software limits agent execution but does not delete your data. Fees are non-refundable except where required by law.
+Qivreno is provided free of charge. Subject to these Terms, 272 Solutions grants you a non-exclusive license to install and use the Software, for personal or business purposes, on as many computers as you like, with no seat limit, no trial period, and no fee. There is nothing to buy and no license key to enter. Because the Software is free, it is provided as-is under Sections 10 and 11, and we are under no obligation to provide updates, support, or continued availability.
 
 ## 6. Third-Party AI Services
 
@@ -45,7 +45,7 @@ The Software stores your data (agents, tasks, messages, documents, memory, setti
 
 ## 8. Acceptable Use
 
-You will not use the Software to violate any law; to infringe others' rights; to generate or distribute malicious code; to send spam or deceptive communications; or to misrepresent AI-generated content as human-authored where the law requires disclosure. You will not reverse engineer the Software except where permitted by law, and you will not circumvent license enforcement.
+You will not use the Software to violate any law; to infringe others' rights; to generate or distribute malicious code; to send spam or deceptive communications; or to misrepresent AI-generated content as human-authored where the law requires disclosure. You will not reverse engineer the Software except where permitted by law.
 
 ## 9. Intellectual Property
 
