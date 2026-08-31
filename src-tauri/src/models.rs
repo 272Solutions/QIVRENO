@@ -162,6 +162,22 @@ pub struct Message {
     pub ts: u64,
 }
 
+/// An MCP server the operator has configured. `enabled` gates execution:
+/// a config alone never starts a process.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct McpServerConfig {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
@@ -210,6 +226,9 @@ pub struct Settings {
     /// One-time flag: Qivvy (the default project-manager agent) was seeded.
     #[serde(default)]
     pub qivvy_seeded: bool,
+    /// MCP servers providing extra agent tools. Off until explicitly enabled.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
     /// IMAP inbox watching (email → proposed tasks). Password stays local.
     #[serde(default)]
     pub mail_enabled: bool,
@@ -284,6 +303,7 @@ impl Default for Settings {
             terms_accepted_version: 0,
             terms_accepted_at: 0,
             qivvy_seeded: false,
+            mcp_servers: Vec::new(),
             mail_enabled: false,
             mail_host: String::new(),
             mail_port: default_imap_port(),

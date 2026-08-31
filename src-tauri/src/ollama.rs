@@ -32,6 +32,9 @@ pub(crate) fn tool_defs(agent: &Agent) -> Vec<Value> {
     if agent.permission == Permission::Full {
         tools.push(json!({"type":"function","function":{"name":"run_command","description":"Run a shell command on this Mac and return its output.","parameters":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}}));
     }
+    // Tools contributed by connected MCP servers (namespaced mcp__*).
+    tools.extend(crate::mcp::tool_defs());
+
     tools
 }
 
@@ -255,6 +258,7 @@ pub(crate) fn exec_tool(
             let command = args["command"].as_str().unwrap_or_default();
             run_shell(&workspace, command)
         }
+        n if n.starts_with(crate::mcp::PREFIX) => crate::mcp::call(n, &args),
         _ => Err(format!("unknown tool '{name}'")),
     };
     match result {

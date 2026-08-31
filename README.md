@@ -165,6 +165,15 @@ if you point an agent at Claude, Codex, Gemini or Grok, that runs on **your**
 subscription or API key with those providers, under their terms. Ollama, LM
 Studio and the bundled llama.cpp engine run locally and cost nothing.
 
+## Plugins
+
+Qivreno is extensible in two ways: **skill packs** (plain-text folders adding
+agent roles, teams and Library documents) and **MCP tool servers** (giving
+agents new tools). See [docs/PLUGINS.md](docs/PLUGINS.md) for the format and
+[examples/plugins/starter-pack](examples/plugins/starter-pack) for a worked
+example. Packs are data and load at startup; MCP servers are programs and run
+only when you enable them.
+
 ## Develop
 
 ```sh

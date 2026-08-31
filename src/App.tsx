@@ -6,7 +6,8 @@ import {
   Agent, AGENT_COLORS, agentTemplateGroups, Availability, BackendKind,
   BuiltinStatus, BUSINESS_PROFILE_SKELETON, Column, CONCIERGE, ConnectedFolder,
   displayName, Doc, fileKind, Permission, Settings,
-  MICRO_ACTIONS, SharedFile, skillsSummary, Snapshot, Task, TeamTemplate, TEMPLATES,
+  LoadedPlugin, McpServerConfig, MICRO_ACTIONS, SharedFile, skillsSummary, Snapshot,
+  Task, teamTemplates, TeamTemplate,
 } from "./types";
 import { TERMS_MD, TERMS_VERSION } from "./terms";
 import { Icon, IconName } from "./Icon";
@@ -57,7 +58,7 @@ function ArmButton(props: {
 }
 
 const EMPTY_SNAPSHOT: Snapshot = {
-  agents: [], tasks: [], messages: [], docs: [], memory: { shared: "", agents: {} },
+  agents: [], tasks: [], messages: [], docs: [], memory: { shared: "", agents: {} }, plugins: [],
   settings: {
     claude_path: "", codex_path: "", gemini_api_key: "", grok_api_key: "", ollama_url: "", lmstudio_url: "",
     bus_port: 0, max_hops: 6, router_model: "", builtin_enabled: false,
@@ -66,7 +67,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
     qivvy_seeded: false,
     mail_enabled: false, mail_host: "", mail_port: 993, mail_user: "", mail_password: "", mail_allowlist: "",
     telegram_enabled: false, telegram_token: "", telegram_chat_id: 0, telegram_pair_code: "",
-    connected_folders: [], micro_enabled: false, micro_bindings: [],
+    connected_folders: [], micro_enabled: false, micro_bindings: [], mcp_servers: [],
   },
 };
 
@@ -721,6 +722,7 @@ export default function App() {
       {editingAgent && (
         <AgentModal
           agent={editingAgent === "new" ? null : editingAgent}
+          plugins={snap.plugins}
           avail={avail}
           onRecheck={checkAvail}
           onClose={() => setEditingAgent(null)}
@@ -730,6 +732,7 @@ export default function App() {
       {showTemplates && (
         <TemplateModal
           existing={snap.agents}
+          plugins={snap.plugins}
           avail={avail}
           onRecheck={checkAvail}
           onConcierge={startConcierge}
@@ -788,6 +791,7 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           settings={snap.settings}
+          plugins={snap.plugins}
           avail={avail}
           theme={theme}
           onTheme={setTheme}
@@ -2811,6 +2815,7 @@ const TEMPLATE_ICONS: Record<string, IconName> = {
 
 function TemplateModal(props: {
   existing: Agent[];
+  plugins: LoadedPlugin[];
   avail: Availability;
   onRecheck: () => void;
   onConcierge: () => void;
@@ -2818,14 +2823,15 @@ function TemplateModal(props: {
   notify: (t: string, e?: boolean) => void;
 }) {
   const { existing, avail, notify } = props;
-  const [tplKey, setTplKey] = useState(TEMPLATES[0].key);
-  const tpl: TeamTemplate = TEMPLATES.find((t) => t.key === tplKey)!;
+  const templates = teamTemplates(props.plugins);
+  const [tplKey, setTplKey] = useState(templates[0].key);
+  const tpl: TeamTemplate = templates.find((t) => t.key === tplKey) ?? templates[0];
   const existingNames = useMemo(
     () => new Set(existing.map((a) => a.name.toLowerCase())),
     [existing],
   );
   const [checked, setChecked] = useState<Set<string>>(
-    () => templateDefaultChecked(TEMPLATES[0], new Set(existing.map((a) => a.name.toLowerCase()))),
+    () => templateDefaultChecked(templates[0], new Set(existing.map((a) => a.name.toLowerCase()))),
   );
   const [backend, setBackend] = useState<BackendKind>(() => firstAvailableBackend(avail));
   const [model, setModel] = useState(localModelsFor(firstAvailableBackend(avail), avail)?.[0] ?? "");
@@ -2841,7 +2847,7 @@ function TemplateModal(props: {
 
   const pickTemplate = (key: string) => {
     setTplKey(key);
-    const t = TEMPLATES.find((x) => x.key === key)!;
+    const t = templates.find((x) => x.key === key)!;
     setChecked(templateDefaultChecked(t, existingNames));
   };
 
@@ -2887,7 +2893,7 @@ function TemplateModal(props: {
         <h2>Quick Start Team</h2>
         <div className="field">
           <div className="radio-row">
-            {TEMPLATES.map((t) => (
+            {templates.map((t) => (
               <button key={t.key} className={`radio-card ${tplKey === t.key ? "selected" : ""}`} onClick={() => pickTemplate(t.key)}>
                 <div className="rc-title"><Icon name={TEMPLATE_ICONS[t.key] ?? "building"} /> {t.label}</div>
                 <div className="rc-sub">{t.description}</div>
@@ -2954,6 +2960,7 @@ function TemplateModal(props: {
 
 function AgentModal(props: {
   agent: Agent | null;
+  plugins: LoadedPlugin[];
   avail: Availability;
   onRecheck: () => void;
   onClose: () => void;
@@ -3012,7 +3019,7 @@ function AgentModal(props: {
               defaultValue=""
               onChange={(e) => {
                 const [gi, ai] = e.target.value.split(":").map(Number);
-                const tpl = agentTemplateGroups()[gi]?.agents[ai];
+                const tpl = agentTemplateGroups(props.plugins)[gi]?.agents[ai];
                 if (tpl) {
                   setName(tpl.name);
                   setRole(tpl.role);
@@ -3023,7 +3030,7 @@ function AgentModal(props: {
               }}
             >
               <option value="">Custom (blank)</option>
-              {agentTemplateGroups().map((g, gi) => (
+              {agentTemplateGroups(props.plugins).map((g, gi) => (
                 <optgroup key={g.label} label={g.label}>
                   {g.agents.map((a, ai) => (
                     <option key={a.name + gi} value={`${gi}:${ai}`}>{a.name} — {a.role}</option>
@@ -3483,6 +3490,7 @@ function BrandingModal(props: {
     setup button that opens its guided wizard. Raw fields live under Advanced. */
 function SettingsModal(props: {
   settings: Settings;
+  plugins: LoadedPlugin[];
   avail: Availability;
   /** Theme lives in localStorage, not Settings, so it is passed in separately. */
   theme: "dark" | "light" | "system";
@@ -3497,6 +3505,7 @@ function SettingsModal(props: {
   const [showTelegram, setShowTelegram] = useState(false);
   const [showBrand, setShowBrand] = useState(false);
   const [showMicro, setShowMicro] = useState(false);
+  const [showPlugins, setShowPlugins] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
 
@@ -3553,6 +3562,20 @@ function SettingsModal(props: {
       status: s.brand_accent || s.brand_text ? `● Custom — accent ${s.brand_accent || "default"}` : "Qivreno Blue (default)",
       tone: s.brand_accent || s.brand_text ? "up" : "",
       action: "Customize", onAction: () => setShowBrand(true),
+    },
+    {
+      icon: "spark", title: "Plugins & tools",
+      status: (() => {
+        const packs = props.plugins.length;
+        const on = (s.mcp_servers ?? []).filter((m) => m.enabled).length;
+        if (!packs && !on) return "No plugins installed — add skill packs and MCP tool servers";
+        const bits = [];
+        if (packs) bits.push(`${packs} pack${packs === 1 ? "" : "s"}`);
+        if (on) bits.push(`${on} MCP server${on === 1 ? "" : "s"} connected`);
+        return `● ${bits.join(" · ")}`;
+      })(),
+      tone: props.plugins.length || (s.mcp_servers ?? []).some((m) => m.enabled) ? "up" : "",
+      action: "Manage", onAction: () => setShowPlugins(true),
     },
     {
       icon: "bolt", title: "Macro pad",
@@ -3675,6 +3698,13 @@ function SettingsModal(props: {
         <MicroModal
           notify={props.notify}
           onClose={() => { setShowMicro(false); refresh(); }}
+        />
+      )}
+      {showPlugins && (
+        <PluginsModal
+          plugins={props.plugins}
+          notify={props.notify}
+          onClose={() => { setShowPlugins(false); refresh(); }}
         />
       )}
       {showTheme && (
@@ -3804,6 +3834,187 @@ function MicroModal(props: { notify: (t: string, e?: boolean) => void; onClose: 
         <div className="modal-actions">
           <button className="btn ghost" onClick={props.onClose}>Cancel</button>
           <button className="btn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Plugins & tools: installed skill packs, and the MCP servers that give
+ *  agents extra tools. Packs are data; MCP servers are programs, so nothing
+ *  here runs until the operator enables it and can see the exact command. */
+function PluginsModal(props: {
+  plugins: LoadedPlugin[];
+  notify: (t: string, e?: boolean) => void;
+  onClose: () => void;
+}) {
+  const [s, setS] = useState<Settings | null>(null);
+  const [status, setStatus] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [packs, setPacks] = useState(props.plugins);
+
+  useEffect(() => {
+    invoke<Snapshot>("get_snapshot").then((sn) => setS(sn.settings)).catch(() => {});
+    invoke<[string, string][]>("mcp_status")
+      .then((rows) => setStatus(Object.fromEntries(rows)))
+      .catch(() => {});
+  }, []);
+  if (!s) return null;
+
+  const servers = s.mcp_servers ?? [];
+  const persist = async (next: Settings, note?: string) => {
+    setBusy(true);
+    try {
+      await invoke("update_settings", { settings: next });
+      setS(next);
+      const rows = await invoke<[string, string][]>("mcp_status");
+      setStatus(Object.fromEntries(rows));
+      if (note) props.notify(note);
+    } catch (e) {
+      props.notify(String(e), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const setServers = (list: McpServerConfig[], note?: string) =>
+    persist({ ...s, mcp_servers: list }, note);
+
+  // Servers a pack suggests but that are not configured yet.
+  const suggested = packs
+    .flatMap((p) => p.mcp_servers.map((m) => ({ ...m, from: p.name })))
+    .filter((m) => !servers.some((x) => x.name === m.name));
+
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal wide">
+        <h2><Icon name="spark" /> Plugins &amp; tools</h2>
+
+        <div className="field">
+          <label>Installed skill packs</label>
+          {packs.length === 0 ? (
+            <div className="hint">
+              No packs yet. A pack is a folder of plain files that adds agent roles, teams and
+              Library documents — no code runs. Drop one into the Plugins folder and reload.
+            </div>
+          ) : (
+            <div className="tpl-list">
+              {packs.map((p) => (
+                <div key={p.id} className="tpl-agent" style={{ display: "block" }}>
+                  <div className="agent-item-name">
+                    {p.name}
+                    {p.version && <span className="tpl-role"> — v{p.version}</span>}
+                    {p.author && <span className="tpl-role"> · {p.author}</span>}
+                  </div>
+                  {p.description && <div className="tpl-skills">{p.description}</div>}
+                  <div className="tpl-skills">
+                    Adds {p.agents.length} role{p.agents.length === 1 ? "" : "s"}
+                    {p.teams.length > 0 && `, ${p.teams.length} team${p.teams.length === 1 ? "" : "s"}`}
+                    {p.docs.length > 0 && `, ${p.docs.length} Library doc${p.docs.length === 1 ? "" : "s"}`}
+                    {p.mcp_servers.length > 0 && `, suggests ${p.mcp_servers.length} MCP server${p.mcp_servers.length === 1 ? "" : "s"}`}
+                  </div>
+                  {p.warnings.length > 0 && (
+                    <div className="tpl-skills" style={{ color: "var(--red)" }}>
+                      {p.warnings.join(" · ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button className="btn ghost sm" onClick={() => invoke("reveal_plugins").catch((e) => props.notify(String(e), true))}>
+              Open plugins folder
+            </button>
+            <button
+              className="btn ghost sm"
+              disabled={busy}
+              onClick={async () => {
+                try {
+                  const next = await invoke<LoadedPlugin[]>("reload_plugins");
+                  setPacks(next);
+                  props.notify(`${next.length} pack${next.length === 1 ? "" : "s"} loaded`);
+                } catch (e) {
+                  props.notify(String(e), true);
+                }
+              }}
+            >
+              Reload packs
+            </button>
+          </div>
+        </div>
+
+        <div className="field">
+          <label>MCP tool servers</label>
+          <div className="hint" style={{ marginBottom: 8 }}>
+            MCP servers give your agents extra tools — databases, GitHub, filesystems and so on.
+            Each one is a real program that runs on this computer with your permissions, so read
+            the command before you enable it. Tools appear to agents as <code>mcp__server__tool</code>.
+          </div>
+          {servers.length === 0 && <div className="hint">None configured.</div>}
+          {servers.map((m, i) => (
+            <div key={m.name + i} className="tpl-agent" style={{ display: "block", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={m.enabled}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const list = servers.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x));
+                    setServers(list, e.target.checked ? `Connecting ${m.name}…` : `${m.name} disconnected`);
+                  }}
+                />
+                <span className="agent-item-name" style={{ flex: 1 }}>{m.name}</span>
+                <span className="tag">{status[m.name] ?? (m.enabled ? "connecting…" : "off")}</span>
+                <button
+                  className="btn ghost sm"
+                  disabled={busy}
+                  onClick={() => setServers(servers.filter((_, j) => j !== i), `${m.name} removed`)}
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="tpl-skills" style={{ fontFamily: "ui-monospace, monospace" }}>
+                {m.command} {m.args.join(" ")}
+              </div>
+            </div>
+          ))}
+
+          {suggested.length > 0 && (
+            <>
+              <label style={{ marginTop: 12 }}>Suggested by your packs</label>
+              {suggested.map((m) => (
+                <div key={m.name} className="tpl-agent" style={{ display: "block", marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="agent-item-name" style={{ flex: 1 }}>
+                      {m.name} <span className="tpl-role">— from {m.from}</span>
+                    </span>
+                    <button
+                      className="btn ghost sm"
+                      disabled={busy}
+                      onClick={() => {
+                        const { from, ...cfg } = m;
+                        setServers([...servers, { ...cfg, enabled: false }], `${m.name} added — enable it to connect`);
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {m.description && <div className="tpl-skills">{m.description}</div>}
+                  <div className="tpl-skills" style={{ fontFamily: "ui-monospace, monospace" }}>
+                    {m.command} {m.args.join(" ")}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        <div className="hint">
+          Agents on the Built-in AI, Ollama, LM Studio, Gemini and Grok backends get MCP tools
+          automatically. Claude and Codex agents use their own CLI tooling instead.
+        </div>
+        <div className="modal-actions">
+          <button className="btn" onClick={props.onClose}>Done</button>
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ pub struct Snapshot {
     pub docs: Vec<Doc>,
     pub memory: MemoryStore,
     pub settings: Settings,
+    pub plugins: Vec<crate::plugins::LoadedPlugin>,
 }
 
 #[tauri::command]
@@ -25,6 +26,7 @@ pub fn get_snapshot(state: State<'_, AppState>) -> Snapshot {
         messages: state.messages.lock().unwrap().clone(),
         docs: state.docs.lock().unwrap().clone(),
         memory: state.memory.lock().unwrap().clone(),
+        plugins: crate::plugins::load_all(),
         settings,
     }
 }
@@ -770,6 +772,40 @@ pub fn update_settings(app: AppHandle, settings: Settings) -> Result<(), String>
     *state.settings.lock().unwrap() = settings;
     state.save_settings();
     crate::micro::sync(&app);
+    // Start or stop MCP servers to match what was just saved.
+    let snapshot = state.settings.lock().unwrap().clone();
+    std::thread::spawn(move || {
+        crate::mcp::sync(&snapshot);
+    });
     runtime::emit_changed(&app);
     Ok(())
+}
+
+/// Rescan ~/Qivreno/Plugins, installing any Library docs new packs ship.
+#[tauri::command]
+pub fn reload_plugins(app: AppHandle) -> Result<Vec<crate::plugins::LoadedPlugin>, String> {
+    let state = app.state::<AppState>();
+    let packs = crate::plugins::load_all();
+    crate::plugins::install_docs(&state, &packs);
+    runtime::emit_changed(&app);
+    Ok(packs)
+}
+
+/// Open the plugins folder so the operator can drop a pack in.
+#[tauri::command]
+pub fn reveal_plugins() -> Result<(), String> {
+    crate::platform::reveal(&crate::plugins::plugins_dir(), false)
+}
+
+/// Connect/disconnect MCP servers to match settings and report per-server status.
+#[tauri::command]
+pub async fn mcp_status(app: AppHandle) -> Result<Vec<(String, String)>, String> {
+    let settings = {
+        let state = app.state::<AppState>();
+        let s = state.settings.lock().unwrap().clone();
+        s
+    };
+    tauri::async_runtime::spawn_blocking(move || crate::mcp::sync(&settings))
+        .await
+        .map_err(|e| e.to_string())
 }

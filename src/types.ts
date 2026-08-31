@@ -82,6 +82,7 @@ export interface Settings {
   /** Macro-pad control surface (Creator Micro etc.). */
   micro_enabled: boolean;
   micro_bindings: MicroBinding[];
+  mcp_servers: McpServerConfig[];
 }
 
 export interface MicroBinding {
@@ -207,6 +208,32 @@ export interface MemoryStore {
   agents: Record<string, string>;
 }
 
+/** An MCP server config. Declaring one never runs it — `enabled` does. */
+export interface McpServerConfig {
+  name: string;
+  description: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  enabled: boolean;
+}
+
+/** A plugin pack loaded from ~/Qivreno/Plugins. Packs are data, not code. */
+export interface LoadedPlugin {
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  homepage: string;
+  agents: TemplateAgent[];
+  teams: { key: string; label: string; description: string; agents: string[] }[];
+  docs: { title: string; kind: string; content: string; file: string }[];
+  mcp_servers: McpServerConfig[];
+  dir: string;
+  warnings: string[];
+}
+
 export interface Snapshot {
   agents: Agent[];
   tasks: Task[];
@@ -214,6 +241,7 @@ export interface Snapshot {
   docs: Doc[];
   memory: MemoryStore;
   settings: Settings;
+  plugins: LoadedPlugin[];
 }
 
 export const AGENT_COLORS = [
@@ -364,10 +392,15 @@ export interface TemplateGroup {
 }
 
 /** Grouped catalog used by the New Agent "start from template" picker. */
-export function agentTemplateGroups(): TemplateGroup[] {
+/** Role catalogue for the pickers: built-ins first, then one group per
+ *  installed plugin pack that ships agents. */
+export function agentTemplateGroups(plugins: LoadedPlugin[] = []): TemplateGroup[] {
   return [
     ...TEMPLATES.map((t) => ({ label: t.label, agents: t.agents })),
     { label: "More roles", agents: EXTRA_ROLES },
+    ...plugins
+      .filter((p) => p.agents.length > 0)
+      .map((p) => ({ label: p.name, agents: p.agents })),
   ];
 }
 
@@ -642,3 +675,20 @@ export const TEMPLATES: TeamTemplate[] = [
     ],
   },
 ];
+
+/** Quick Start teams: the built-ins plus any teams installed plugin packs
+ *  define. A pack team's agents are resolved from that same pack. */
+export function teamTemplates(plugins: LoadedPlugin[] = []): TeamTemplate[] {
+  const packTeams: TeamTemplate[] = [];
+  for (const p of plugins) {
+    for (const t of p.teams) {
+      const agents = t.agents
+        .map((n) => p.agents.find((a) => a.name.toLowerCase() === n.toLowerCase()))
+        .filter((a): a is TemplateAgent => !!a);
+      if (agents.length) {
+        packTeams.push({ key: `plugin:${p.id}:${t.key}`, label: t.label, description: t.description, agents });
+      }
+    }
+  }
+  return [...TEMPLATES, ...packTeams];
+}

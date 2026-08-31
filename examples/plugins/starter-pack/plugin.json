@@ -1,0 +1,44 @@
+{
+  "id": "starter-pack",
+  "name": "Starter Pack (example)",
+  "version": "1.0.0",
+  "author": "272 Solutions",
+  "description": "A worked example showing everything a Qivreno plugin pack can add: agent roles, a one-click team, a Library document, and a suggested MCP tool server.",
+  "homepage": "https://github.com/272Solutions/QIVRENO",
+
+  "agents": [
+    {
+      "name": "Grants",
+      "role": "Grant Writer",
+      "description": "Finds and writes grant applications — eligibility checks, narratives, budgets, and submission checklists.",
+      "color": "#5fd4a2",
+      "skills_file": "agents/grants.md"
+    }
+  ],
+
+  "teams": [
+    {
+      "key": "grants",
+      "label": "Grant Desk",
+      "description": "One role focused on funding applications end to end.",
+      "agents": ["Grants"]
+    }
+  ],
+
+  "docs": [
+    {
+      "title": "Grant Application Checklist",
+      "kind": "process",
+      "file": "docs/grant-checklist.md"
+    }
+  ],
+
+  "mcp_servers": [
+    {
+      "name": "filesystem",
+      "description": "Read and write files in a folder you choose. Replace /tmp with the folder you want agents to reach.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    }
+  ]
+}

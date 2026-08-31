@@ -6,9 +6,11 @@ mod detect;
 mod docx;
 mod export;
 mod mail;
+mod mcp;
 mod micro;
 mod pdf;
 mod platform;
+mod plugins;
 mod pptx;
 mod library;
 mod lmstudio;
@@ -69,6 +71,15 @@ pub fn run() {
             runtime::ensure_qivvy(app.handle());
             micro::sync(app.handle());
             runtime::start_watchdog(app.handle().clone());
+            // Plugin packs are data: load them, install any Library docs they
+            // ship, then connect only the MCP servers already enabled.
+            {
+                let state = app.state::<AppState>();
+                let packs = plugins::load_all();
+                plugins::install_docs(&state, &packs);
+                let settings = state.settings.lock().unwrap().clone();
+                mcp::sync(&settings);
+            }
             mail::start_watcher(app.handle().clone());
             telegram::start_bot(app.handle().clone());
             Ok(())
@@ -110,12 +121,16 @@ pub fn run() {
             commands::import_brand_template,
             commands::accept_terms,
             commands::quit_app,
+            commands::reload_plugins,
+            commands::reveal_plugins,
+            commands::mcp_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
             // Make sure the bundled AI engine dies with the app.
             if let tauri::RunEvent::Exit = event {
+                mcp::stop_all();
                 builtin::stop(app);
             }
         });
