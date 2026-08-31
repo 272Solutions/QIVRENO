@@ -22,8 +22,8 @@ mod telegram;
 use state::AppState;
 use tauri::Manager;
 
-/// One-time migration from pre-rename identifiers (Agentry, Agent
-/// Workspace) so existing users keep their team.
+/// One-time migration from the pre-rename Agentry identifier so existing
+/// users keep their team.
 fn migrate_legacy_data(data_dir: &std::path::Path) {
     if data_dir.join("agents.json").exists() {
         return;
