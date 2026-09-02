@@ -2,6 +2,7 @@
   "name": "qivreno",
   "private": true,
   "version": "1.7.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,13 +1,29 @@
 # Qivreno
 
-A desktop app for running a team of up to **12 autonomous AI agents**.
-Give a task to the whole team and the best-suited agent picks it up, or assign
-it to a specific agent. Agents chat with you, message and delegate to each
-other, move work across a shared kanban board, and keep their own working
-folders on disk.
+**A local-first desktop app for running a team of AI agents.** Give a task to
+the whole team and the best-suited agent picks it up, or assign it to a
+specific one. Agents chat with you, delegate to each other, move work across a
+shared kanban board, and write real deliverables — documents, spreadsheets,
+decks — into a folder on your disk.
 
-Built with Tauri 2 (Rust core + React/TypeScript UI). Currently ships for
-macOS; the stack is cross-platform (see the Windows roadmap below).
+Free, MIT-licensed, and built so that **nothing has to leave your computer**:
+the bundled AI engine runs a local model with one click, there is no account,
+no licence key, no telemetry and no Qivreno server anywhere in the loop. When
+you want stronger results you can point any individual agent at Claude, Codex,
+Gemini or Grok using your own subscription — per agent, so you decide exactly
+what leaves the machine and what does not.
+
+Built with Tauri 2 (Rust core + React/TypeScript UI). Ships for macOS today;
+the stack is cross-platform and a Windows build exists (see below).
+
+**[Download](https://qivreno.ai/download)** · [Plugins](docs/PLUGINS.md) ·
+[Discord](https://discord.gg/REPLACE-ME) · MIT
+
+> Honest note: Qivreno was built as a paid product and did not find its
+> market. It is released free and open rather than left to rot. On the bundled
+> local model it is capable but limited — expect slower, simpler work than a
+> frontier model, and point agents at Claude or Codex when the output has to
+> be sharp.
 
 ## Example: scale a small business without headcount
 
@@ -173,6 +189,27 @@ agents new tools). See [docs/PLUGINS.md](docs/PLUGINS.md) for the format and
 [examples/plugins/starter-pack](examples/plugins/starter-pack) for a worked
 example. Packs are data and load at startup; MCP servers are programs and run
 only when you enable them.
+
+## Contributing
+
+Issues and pull requests are welcome. The most useful contributions right
+now are plugin packs (see [docs/PLUGINS.md](docs/PLUGINS.md)), Windows
+testing, and bug reports with the task log attached.
+
+This is maintained by one person alongside client work, so responses are
+best-effort. If something is broken, a clear reproduction is worth more than
+a patch.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Use it commercially, fork it, ship it.
+
+The **Qivreno** name, logo and brand assets in `brand/` are trademarks of
+272 Solutions LLC and are not covered by the MIT grant; forks should ship
+under their own name.
+
+Much of this codebase was written with Claude (Anthropic) pair-programming,
+which the commit history reflects.
 
 ## Develop
 
