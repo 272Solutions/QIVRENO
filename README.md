@@ -16,8 +16,14 @@ what leaves the machine and what does not.
 Built with Tauri 2 (Rust core + React/TypeScript UI). Ships for macOS today;
 the stack is cross-platform and a Windows build exists (see below).
 
+![Qivreno: a task dispatched to an agent, worked, and returned as a document](docs/demo.gif)
+
+<sub>The real app, unedited apart from trimming the wait: a task moves To Do →
+In Progress → Review, and the agent's document opens in Files. Recorded on the
+bundled local model with no cloud provider connected.</sub>
+
 **[Download](https://qivreno.ai/download)** · [Plugins](docs/PLUGINS.md) ·
-[Discord](https://discord.gg/REPLACE-ME) · MIT
+[Discord](https://discord.gg/GBdVrTZCqn) · MIT
 
 > Honest note: Qivreno was built as a paid product and did not find its
 > market. It is released free and open rather than left to rot. On the bundled
